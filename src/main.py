@@ -27,5 +27,5 @@ if __name__ == '__main__':
     ]
 
     seq = SequentialPOVMMeasurement(povm_effects, [1, 2, 3, 4, 5, 6])
-    circuits = seq.make_circuits([[1, 2], [[3, 4], [5, 6]]], circ, q, c)
+    circuits = seq.make_circuits([[1, 4], [[2, 5], [3, 6]]], circ)
     print(circuits)

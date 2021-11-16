@@ -18,7 +18,6 @@ class SequentialPOVMMeasurementTree:
 
         for i in i2:
             effects2.append(elements[i - 1])
-
         self.result_measured = effects1
         self.result_other = effects2
 
@@ -88,42 +87,38 @@ class SequentialPOVMMeasurementTree:
         return None
 
 
-
 class SequentialPOVMMeasurement:
     def __init__(self, elements: List[np.array], labels: List[int]) -> None:
         self.labels = labels
         self.elements = elements
         self.dimension = elements[0].ndim
 
-    def make_circuits(self, partitioning: list, circuit: QuantumCircuit, q_reg: QuantumRegister,
-                      c_reg: ClassicalRegister):
+    def make_circuits(self, partitioning: list, circuit: QuantumCircuit):
         seq = SequentialPOVMMeasurementTree(self.elements, self.labels, partitioning)
         circuits = []
-        SequentialPOVMMeasurement.__make_circuits_accum(seq, circuit, q_reg, c_reg, circuits)
+        SequentialPOVMMeasurement.__make_circuits_accum(self, seq, circuit, circuits)
         return circuits
 
-    @staticmethod
-    def __make_circuits_accum(seq: SequentialPOVMMeasurementTree,  circuit: QuantumCircuit, q_reg: QuantumRegister,
-                              c_reg: ClassicalRegister, accumulator: List[QuantumCircuit]):
+    def __make_circuits_accum(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit, accumulator: List[QuantumCircuit]):
         b = np.sum(seq.result_measured, 0)
-        print(seq.label)
-        luder = SequentialPOVMMeasurement.luder_measurement(b, circuit, q_reg, c_reg)
+        luder = SequentialPOVMMeasurement.luder_measurement(self, b)
         circuit += luder
 
-        final_circuit = False
-        if (seq.partitioning_measured is not None):
+        if seq.partitioning_measured is not None:
             circuit_copy = copy.deepcopy(circuit)
-            SequentialPOVMMeasurement.__make_circuits_accum(seq.partitioning_measured, circuit_copy, q_reg, c_reg, accumulator)
+            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_measured, circuit_copy, accumulator)
         else:
             accumulator.append(copy.deepcopy(circuit))
 
-        if (seq.partitioning_other is not None):
+        if seq.partitioning_other is not None:
             circuit_copy = copy.deepcopy(circuit)
-            SequentialPOVMMeasurement.__make_circuits_accum(seq.partitioning_other, circuit_copy, q_reg, c_reg, accumulator)
+            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, accumulator)
 
-    @staticmethod
-    def luder_measurement(b_measurement: np.array, circuit: QuantumCircuit, q_reg: QuantumRegister,
-                          c_reg: ClassicalRegister):
+    def luder_measurement(self, b_measurement: np.array):
+
+        # create circuit
+        circuit = QuantumCircuit(self.dimension + 1, self.dimension + 1)
+
         # SVD of B matrix into U, B diag and V
         u, b_diag, v = np.linalg.svd(b_measurement, full_matrices=True)
         # transform values into numpy arrays
@@ -134,23 +129,22 @@ class SequentialPOVMMeasurement:
         u_b_gate = UnitaryGate(u)
         u_b_dagger_gate = UnitaryGate(u.conj().transpose())
 
-        circuit.append(u_b_gate, [q_reg[0]])
-        circuit.append(u_b_gate, [q_reg[1]])
+        for i in range(0, self.dimension):
+            circuit.append(u_b_gate, [circuit.qubits[i]])
 
         # make control gates
-        for i in range(0, 2):
-            # vj = add_control(UnitaryGate(self.calc_v(i)), 1)
+        for i in range(0, self.dimension):
             vj = UnitaryGate(SequentialPOVMMeasurement.calc_v(b_diag[i])).control(1)
-            circuit.append(vj, [q_reg[i], q_reg[2]])
+            circuit.append(vj, [circuit.qubits[i], circuit.qubits[self.dimension]])
 
-        circuit.append(u_b_dagger_gate, [q_reg[0]])
-        circuit.append(u_b_dagger_gate, [q_reg[1]])
+        for i in range(0, self.dimension):
+            circuit.append(u_b_gate, [circuit.qubits[i]])
 
-        circuit.measure(q_reg[2], c_reg[2])
+        circuit.measure(circuit.qubits[self.dimension], circuit.clbits[self.dimension])
 
         return circuit
 
     @staticmethod
-    def calc_v(l):
-        return np.array([[(1 - l) ** (1 / 2), -(l ** (1 / 2))], [l ** (1 / 2), (1 - l) ** (1 / 2)]])
-
+    def calc_v(eigenvalue):
+        eigenvalue = np.round(eigenvalue, 14)
+        return np.array([[(1 - eigenvalue) ** (1 / 2), -(eigenvalue ** (1 / 2))], [eigenvalue ** (1 / 2), (1 - eigenvalue) ** (1 / 2)]])
