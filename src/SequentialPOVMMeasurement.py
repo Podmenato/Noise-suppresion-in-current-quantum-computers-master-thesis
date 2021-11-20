@@ -6,9 +6,15 @@ from qiskit.extensions import UnitaryGate
 from qiskit.circuit.add_control import add_control
 from scipy.linalg import fractional_matrix_power
 
-
 class SequentialPOVMMeasurementTree:
     def __init__(self, elements: List[np.array], labels: List[int], partitioning: list) -> None:
+        """
+        Internal structure representing the sequential POVM measurement tree, based on the entered partitioning
+        :param elements: list of all element matrices
+        :param labels: TODO implement labels
+        :param partitioning: list of indices, representing the partitioning, i.e. [[1-2],[3-4]]
+        TODO instead of indices, use labels
+        """
         i1, i2 = SequentialPOVMMeasurementTree.__get_results_idx_list(partitioning)
 
         effects1 = []
@@ -89,21 +95,48 @@ class SequentialPOVMMeasurementTree:
 
 class SequentialPOVMMeasurement:
     def __init__(self, elements: List[np.array], labels: List[int]) -> None:
+        """
+        Class used to create circuits for POVM representation using the sequential measurement method
+        :param elements: list of all element matrices
+        :param labels: TODO
+        """
         self.labels = labels
         self.elements = elements
+        # TODO check if this is the correct way to get the dimension
         self.dimension = elements[0].ndim
 
-    def make_circuits(self, partitioning: list, circuit: QuantumCircuit):
+    def make_circuits(self, partitioning: list):
+        """
+        Creates circuits, each measures its specific measurement
+        :param partitioning: list of indices, each corresponding to the index in the element in elements array.
+            Should be in the following format [[1, 2],[3, 4]]. Note, [1,[2, 3]] is not valid, [[1], [2, 3]] is.
+        :return: List of QuantumCircuits
+        """
+        # create measurement tree structure
         seq = SequentialPOVMMeasurementTree(self.elements, self.labels, partitioning)
         circuits = []
-        SequentialPOVMMeasurement.__make_circuits_accum(self, seq, circuit, circuits)
+        base_circuit = QuantumCircuit(self.dimension+1, self.dimension+1)
+        SequentialPOVMMeasurement.__make_circuits_accum(self, seq, base_circuit, circuits)
         return circuits
 
-    def __make_circuits_accum(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit, accumulator: List[QuantumCircuit]):
+    def __make_circuits_accum(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit,
+                              accumulator: List[QuantumCircuit]):
+        """
+        Helper method used to traverse the SequentialPOVMMeasurementTree and create circuits from it
+        :param seq: Internal tree structure
+        :param circuit: quantum circuit on to which new addition should be appended
+        :param accumulator: list of already finished circuits
+        :return: None
+        """
+
+        # current measurement
         b = np.sum(seq.result_measured, 0)
+
+        # create luder measurement circuit based on b
         luder = SequentialPOVMMeasurement.luder_measurement(self, b)
         circuit += luder
 
+        # traversing deeper into the seq structure
         if seq.partitioning_measured is not None:
             circuit_copy = copy.deepcopy(circuit)
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_measured, circuit_copy, accumulator)
@@ -114,8 +147,34 @@ class SequentialPOVMMeasurement:
             circuit_copy = copy.deepcopy(circuit)
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, accumulator)
 
-    def luder_measurement(self, b_measurement: np.array):
+    def make_single_circuit(self, partitioning: list):
+        """
+        WIP
+        :param partitioning:
+        :return:
+        """
+        # TODO implement method
+        seq = SequentialPOVMMeasurementTree(self.elements, self.labels, partitioning)
+        circ = QuantumCircuit(self.dimension+1, len(self.elements))
 
+    def __make_single_circuit_helper(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit):
+        """
+        WIP
+        :param seq:
+        :param circuit:
+        :return:
+        """
+        # TODO implement method
+        b = np.sum(seq.result_measured, 0)
+        luder = SequentialPOVMMeasurement.luder_measurement(self, b)
+
+
+    def luder_measurement(self, b_measurement: np.array) -> QuantumCircuit:
+        """
+        Returns a circuit representing the Luder measurement
+        :param b_measurement: Numpy array matrix, representing the coarse graining of POVM measurements
+        :return: QuantumCircuit
+        """
         # create circuit
         circuit = QuantumCircuit(self.dimension + 1, self.dimension + 1)
 
@@ -125,7 +184,7 @@ class SequentialPOVMMeasurement:
         u = np.array(u)
         b_diag = np.array(b_diag)
 
-        # create Ub and Ub* gates
+        # create Ub and Ub dagger gates
         u_b_gate = UnitaryGate(u)
         u_b_dagger_gate = UnitaryGate(u.conj().transpose())
 
@@ -135,7 +194,7 @@ class SequentialPOVMMeasurement:
         # make control gates
         for i in range(0, self.dimension):
             vj = UnitaryGate(SequentialPOVMMeasurement.calc_v(b_diag[i])).control(1)
-            circuit.append(vj, [circuit.qubits[i], circuit.qubits[self.dimension]])
+            circuit.append(vj, [circuit.qubits[self.dimension], circuit.qubits[i]])
 
         for i in range(0, self.dimension):
             circuit.append(u_b_gate, [circuit.qubits[i]])
@@ -146,5 +205,11 @@ class SequentialPOVMMeasurement:
 
     @staticmethod
     def calc_v(eigenvalue):
+        """
+        Calculates V matrix from the eigenvalue on the B diagonal matrix
+        :param eigenvalue: the value from B diagonal
+        :return: V matrix
+        """
         eigenvalue = np.round(eigenvalue, 14)
-        return np.array([[(1 - eigenvalue) ** (1 / 2), -(eigenvalue ** (1 / 2))], [eigenvalue ** (1 / 2), (1 - eigenvalue) ** (1 / 2)]])
+        return np.array([[(1 - eigenvalue) ** (1 / 2), -(eigenvalue ** (1 / 2))],
+                         [eigenvalue ** (1 / 2), (1 - eigenvalue) ** (1 / 2)]])
