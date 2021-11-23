@@ -102,12 +102,11 @@ class SequentialPOVMMeasurement:
         """
         self.labels = labels
         self.elements = elements
-        # TODO check if this is the correct way to get the dimension
-        self.dimension = elements[0].ndim
 
-    def make_circuits(self, partitioning: list):
+    def make_circuits(self, partitioning: list, state: QuantumCircuit):
         """
         Creates circuits, each measures its specific measurement
+        :param state: circuit with prepared state
         :param partitioning: list of indices, each corresponding to the index in the element in elements array.
             Should be in the following format [[1, 2],[3, 4]]. Note, [1,[2, 3]] is not valid, [[1], [2, 3]] is.
         :return: List of QuantumCircuits
@@ -115,7 +114,9 @@ class SequentialPOVMMeasurement:
         # create measurement tree structure
         seq = SequentialPOVMMeasurementTree(self.elements, self.labels, partitioning)
         circuits = []
-        base_circuit = QuantumCircuit(self.dimension+1, self.dimension+1)
+        qubits_count = len(state.qubits)
+        base_circuit = QuantumCircuit(qubits_count + 1, qubits_count + 1)
+        base_circuit = base_circuit.compose(state)
         SequentialPOVMMeasurement.__make_circuits_accum(self, seq, base_circuit, circuits)
         return circuits
 
@@ -133,7 +134,7 @@ class SequentialPOVMMeasurement:
         b = np.sum(seq.result_measured, 0)
 
         # create luder measurement circuit based on b
-        luder = SequentialPOVMMeasurement.luder_measurement(self, b)
+        luder = SequentialPOVMMeasurement.luder_measurement(self, b, len(circuit.qubits) - 1)
         circuit += luder
 
         # traversing deeper into the seq structure
@@ -155,7 +156,6 @@ class SequentialPOVMMeasurement:
         """
         # TODO implement method
         seq = SequentialPOVMMeasurementTree(self.elements, self.labels, partitioning)
-        circ = QuantumCircuit(self.dimension+1, len(self.elements))
 
     def __make_single_circuit_helper(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit):
         """
@@ -166,17 +166,16 @@ class SequentialPOVMMeasurement:
         """
         # TODO implement method
         b = np.sum(seq.result_measured, 0)
-        luder = SequentialPOVMMeasurement.luder_measurement(self, b)
 
 
-    def luder_measurement(self, b_measurement: np.array) -> QuantumCircuit:
+    def luder_measurement(self, b_measurement: np.array, qubits: int) -> QuantumCircuit:
         """
         Returns a circuit representing the Luder measurement
         :param b_measurement: Numpy array matrix, representing the coarse graining of POVM measurements
         :return: QuantumCircuit
         """
         # create circuit
-        circuit = QuantumCircuit(self.dimension + 1, self.dimension + 1)
+        circuit = QuantumCircuit(qubits + 1, qubits + 1)
 
         # SVD of B matrix into U, B diag and V
         u, b_diag, v = np.linalg.svd(b_measurement, full_matrices=True)
@@ -188,18 +187,18 @@ class SequentialPOVMMeasurement:
         u_b_gate = UnitaryGate(u)
         u_b_dagger_gate = UnitaryGate(u.conj().transpose())
 
-        for i in range(0, self.dimension):
+        for i in range(0, qubits):
             circuit.append(u_b_gate, [circuit.qubits[i]])
 
         # make control gates
-        for i in range(0, self.dimension):
+        for i in range(0, qubits):
             vj = UnitaryGate(SequentialPOVMMeasurement.calc_v(b_diag[i])).control(1)
-            circuit.append(vj, [circuit.qubits[self.dimension], circuit.qubits[i]])
+            circuit.append(vj, [circuit.qubits[i], circuit.qubits[qubits]])
 
-        for i in range(0, self.dimension):
+        for i in range(0, qubits):
             circuit.append(u_b_gate, [circuit.qubits[i]])
 
-        circuit.measure(circuit.qubits[self.dimension], circuit.clbits[self.dimension])
+        circuit.measure(circuit.qubits[qubits], circuit.clbits[qubits])
 
         return circuit
 
