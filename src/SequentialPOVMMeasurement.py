@@ -1,20 +1,23 @@
 import copy
-from typing import List, Union
+from typing import List, Union, Tuple
 import numpy as np
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.extensions import UnitaryGate
 from qiskit.circuit.add_control import add_control
 from scipy.linalg import fractional_matrix_power
 
+
 class SequentialPOVMMeasurementTree:
-    def __init__(self, elements: List[np.array], labels: List[int], partitioning: list) -> None:
+    def __init__(self, elements: List[np.array], labels: List[int], partitioning: list, depth=0, measuring_label="(0/1)") -> None:
         """
         Internal structure representing the sequential POVM measurement tree, based on the entered partitioning
         :param elements: list of all element matrices
         :param labels: TODO implement labels
         :param partitioning: list of indices, representing the partitioning, i.e. [[1-2],[3-4]]
+        :param depth: depth of the node inside the tree
         TODO instead of indices, use labels
         """
+        self.depth = depth + 1
         i1, i2 = SequentialPOVMMeasurementTree.__get_results_idx_list(partitioning)
 
         effects1 = []
@@ -27,13 +30,13 @@ class SequentialPOVMMeasurementTree:
         self.result_measured = effects1
         self.result_other = effects2
 
-        self.label = ''.join(map(str, i1)) + '-' + ''.join(map(str, i2))
+        self.label = ''.join(map(str, i1)) + '-' + ''.join(map(str, i2)) + ' ' + measuring_label
 
         self.partitioning_measured = SequentialPOVMMeasurementTree.__make_sub_measurements(elements, effects1, i1,
-                                                                                           partitioning[0])
+                                                                                           partitioning[0], depth=self.depth, measuring_label='0'+measuring_label)
 
         self.partitioning_other = SequentialPOVMMeasurementTree.__make_sub_measurements(elements, effects2, i2,
-                                                                                        partitioning[1])
+                                                                                        partitioning[1], depth=self.depth, measuring_label='1'+measuring_label)
 
     @staticmethod
     def __get_results_idx_list(partitioning: list):
@@ -80,7 +83,7 @@ class SequentialPOVMMeasurementTree:
 
     @staticmethod
     def __make_sub_measurements(all_elements: List[np.array], measured_elements: List[np.array], indices: List[int],
-                                partitioning: list):
+                                partitioning: list, depth: int, measuring_label: str):
         if len(measured_elements) != 1:
             new_elements = []
             for i in range(0, len(all_elements)):
@@ -89,8 +92,25 @@ class SequentialPOVMMeasurementTree:
                     new_elements.append(SequentialPOVMMeasurementTree.__measurement_change(b, all_elements[i]))
                 else:
                     new_elements.append(None)
-            return SequentialPOVMMeasurementTree(new_elements, [], partitioning)
+            return SequentialPOVMMeasurementTree(new_elements, [], partitioning, depth, measuring_label=measuring_label)
         return None
+
+    def largest_depth(self):
+        measured_depth = self.depth
+        other_depth = self.depth
+
+        if self.partitioning_measured is not None:
+            measured_depth = self.partitioning_measured.largest_depth()
+
+        if self.partitioning_other is not None:
+            other_depth = self.partitioning_other.largest_depth()
+
+        if measured_depth > other_depth:
+            return measured_depth
+        elif other_depth > measured_depth:
+            return other_depth
+        else:
+            return measured_depth
 
 
 class SequentialPOVMMeasurement:
@@ -115,13 +135,14 @@ class SequentialPOVMMeasurement:
         seq = SequentialPOVMMeasurementTree(self.elements, self.labels, partitioning)
         circuits = []
         qubits_count = len(state.qubits)
-        base_circuit = QuantumCircuit(qubits_count + 1, qubits_count + 1)
+        classical_count = seq.largest_depth()
+        base_circuit = QuantumCircuit(qubits_count + 1, classical_count)
         base_circuit = base_circuit.compose(state)
         SequentialPOVMMeasurement.__make_circuits_accum(self, seq, base_circuit, circuits)
         return circuits
 
     def __make_circuits_accum(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit,
-                              accumulator: List[QuantumCircuit]):
+                              accumulator: List[Tuple[QuantumCircuit, str]]):
         """
         Helper method used to traverse the SequentialPOVMMeasurementTree and create circuits from it
         :param seq: Internal tree structure
@@ -134,7 +155,7 @@ class SequentialPOVMMeasurement:
         b = np.sum(seq.result_measured, 0)
 
         # create luder measurement circuit based on b
-        luder = SequentialPOVMMeasurement.luder_measurement(self, b, len(circuit.qubits) - 1)
+        luder = SequentialPOVMMeasurement.luder_measurement(self, b, len(circuit.qubits) - 1, len(circuit.clbits), seq.depth - 1)
         circuit += luder
 
         # traversing deeper into the seq structure
@@ -142,7 +163,7 @@ class SequentialPOVMMeasurement:
             circuit_copy = copy.deepcopy(circuit)
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_measured, circuit_copy, accumulator)
         else:
-            accumulator.append(copy.deepcopy(circuit))
+            accumulator.append((copy.deepcopy(circuit), seq.label))
 
         if seq.partitioning_other is not None:
             circuit_copy = copy.deepcopy(circuit)
@@ -167,15 +188,14 @@ class SequentialPOVMMeasurement:
         # TODO implement method
         b = np.sum(seq.result_measured, 0)
 
-
-    def luder_measurement(self, b_measurement: np.array, qubits: int) -> QuantumCircuit:
+    def luder_measurement(self, b_measurement: np.array, qubits: int, cbits: int, measuring_clbit=0) -> QuantumCircuit:
         """
         Returns a circuit representing the Luder measurement
         :param b_measurement: Numpy array matrix, representing the coarse graining of POVM measurements
         :return: QuantumCircuit
         """
         # create circuit
-        circuit = QuantumCircuit(qubits + 1, qubits + 1)
+        circuit = QuantumCircuit(qubits + 1, cbits)
 
         # SVD of B matrix into U, B diag and V
         u, b_diag, v = np.linalg.svd(b_measurement, full_matrices=True)
@@ -198,7 +218,7 @@ class SequentialPOVMMeasurement:
         for i in range(0, qubits):
             circuit.append(u_b_gate, [circuit.qubits[i]])
 
-        circuit.measure(circuit.qubits[qubits], circuit.clbits[qubits])
+        circuit.measure(circuit.qubits[qubits], measuring_clbit)
 
         return circuit
 

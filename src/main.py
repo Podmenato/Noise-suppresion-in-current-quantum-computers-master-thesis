@@ -24,5 +24,5 @@ if __name__ == '__main__':
     state = QuantumCircuit(1, 1)
     state.h(0)
     circuits = seq.make_circuits([[1, 4], [[2, 5], [3, 6]]], state)
-    print(circuits)
+    print(circuits[0][0])
     print(state.qubits)
