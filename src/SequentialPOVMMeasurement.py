@@ -188,7 +188,7 @@ class SequentialPOVMMeasurement:
         # TODO implement method
         b = np.sum(seq.result_measured, 0)
 
-    def luder_measurement(self, b_measurement: np.array, qubits: int, cbits: int, measuring_clbit=0) -> QuantumCircuit:
+    def luder_measurement(self, b_measurement: np.array, qubits: int, cbits: int, measuring_clbit=0, measure=True) -> QuantumCircuit:
         """
         Returns a circuit representing the Luder measurement
         :param b_measurement: Numpy array matrix, representing the coarse graining of POVM measurements
@@ -218,7 +218,8 @@ class SequentialPOVMMeasurement:
         for i in range(0, qubits):
             circuit.append(u_b_gate, [circuit.qubits[i]])
 
-        circuit.measure(circuit.qubits[qubits], measuring_clbit)
+        if measure:
+            circuit.measure(circuit.qubits[qubits], measuring_clbit)
 
         return circuit
 
