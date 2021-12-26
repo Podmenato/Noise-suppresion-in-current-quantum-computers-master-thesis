@@ -1,10 +1,8 @@
 import copy
 from typing import List, Union, Tuple
 import numpy as np
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
-from qiskit.extensions import UnitaryGate
-from qiskit.circuit.add_control import add_control
-from scipy.linalg import fractional_matrix_power
+from qiskit import *
+from utilities import measurement_change, luder_measurement
 
 
 class SequentialPOVMMeasurementTree:
@@ -76,12 +74,6 @@ class SequentialPOVMMeasurementTree:
             return [*p1, *p2]
 
     @staticmethod
-    def __measurement_change(b: np.array, effect: np.array):
-        b_pinv = np.linalg.pinv(fractional_matrix_power(b, 0.5))
-
-        return np.matmul(np.matmul(b_pinv, effect), b_pinv)
-
-    @staticmethod
     def __make_sub_measurements(all_elements: List[np.array], measured_elements: List[np.array], indices: List[int],
                                 partitioning: list, depth: int, measuring_label: str):
         if len(measured_elements) != 1:
@@ -89,7 +81,7 @@ class SequentialPOVMMeasurementTree:
             for i in range(0, len(all_elements)):
                 if i + 1 in indices:
                     b = np.sum(measured_elements, 0)
-                    new_elements.append(SequentialPOVMMeasurementTree.__measurement_change(b, all_elements[i]))
+                    new_elements.append(measurement_change(b, all_elements[i]))
                 else:
                     new_elements.append(None)
             return SequentialPOVMMeasurementTree(new_elements, [], partitioning, depth, measuring_label=measuring_label)
@@ -155,7 +147,7 @@ class SequentialPOVMMeasurement:
         b = np.sum(seq.result_measured, 0)
 
         # create luder measurement circuit based on b
-        luder = SequentialPOVMMeasurement.luder_measurement(self, b, len(circuit.qubits) - 1, len(circuit.clbits), seq.depth - 1)
+        luder = luder_measurement(b, len(circuit.qubits) - 1, len(circuit.clbits), seq.depth - 1)
         circuit += luder
 
         # traversing deeper into the seq structure
@@ -187,49 +179,3 @@ class SequentialPOVMMeasurement:
         """
         # TODO implement method
         b = np.sum(seq.result_measured, 0)
-
-    def luder_measurement(self, b_measurement: np.array, qubits: int, cbits: int, measuring_clbit=0, measure=True) -> QuantumCircuit:
-        """
-        Returns a circuit representing the Luder measurement
-        :param b_measurement: Numpy array matrix, representing the coarse graining of POVM measurements
-        :return: QuantumCircuit
-        """
-        # create circuit
-        circuit = QuantumCircuit(qubits + 1, cbits)
-
-        # SVD of B matrix into U, B diag and V
-        u, b_diag, v = np.linalg.svd(b_measurement, full_matrices=True)
-        # transform values into numpy arrays
-        u = np.array(u)
-        b_diag = np.array(b_diag)
-
-        # create Ub and Ub dagger gates
-        u_b_gate = UnitaryGate(u)
-        u_b_dagger_gate = UnitaryGate(u.conj().transpose())
-
-        for i in range(0, qubits):
-            circuit.append(u_b_gate, [circuit.qubits[i]])
-
-        # make control gates
-        for i in range(0, qubits):
-            vj = UnitaryGate(SequentialPOVMMeasurement.calc_v(b_diag[i])).control(1)
-            circuit.append(vj, [circuit.qubits[i], circuit.qubits[qubits]])
-
-        for i in range(0, qubits):
-            circuit.append(u_b_gate, [circuit.qubits[i]])
-
-        if measure:
-            circuit.measure(circuit.qubits[qubits], measuring_clbit)
-
-        return circuit
-
-    @staticmethod
-    def calc_v(eigenvalue):
-        """
-        Calculates V matrix from the eigenvalue on the B diagonal matrix
-        :param eigenvalue: the value from B diagonal
-        :return: V matrix
-        """
-        eigenvalue = np.round(eigenvalue, 14)
-        return np.array([[(1 - eigenvalue) ** (1 / 2), -(eigenvalue ** (1 / 2))],
-                         [eigenvalue ** (1 / 2), (1 - eigenvalue) ** (1 / 2)]])
