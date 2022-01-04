@@ -3,6 +3,7 @@ from scipy.linalg import fractional_matrix_power
 from qiskit.extensions import UnitaryGate
 from qiskit import *
 from qiskit.circuit.add_control import add_control
+import matplotlib.pyplot as plt
 
 
 def measurement_change(b: np.array, effect: np.array):
@@ -68,3 +69,39 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     circuit.reset(qubits)
 
     return circuit
+
+
+def plot_povm_histogram(data, title=None):
+    keys = list(data.keys())
+
+    length = len(keys[0])
+    names = ['1'*length, '0'+'1'*(length-1), 'rest']
+
+    rest = 0
+    for key in keys:
+        if key not in names:
+            rest += data[key]
+
+    measured = 0
+    if names[0] in keys:
+        measured = data[names[0]]
+
+    measured_opposite = 0
+    if names[1] in keys:
+        measured_opposite = data[names[1]]
+
+    values = [measured/1000, measured_opposite/1000, rest/1000]
+
+    font = {'size': 14}
+
+    plt.figure()
+    plt.xlabel("Measured qubits", font)
+    plt.ylabel("Counts", font)
+    plt.bar(names, values)
+    xlocs, xlabs = plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.title(title)
+    for i, v in enumerate(values):
+        plt.text(xlocs[i] - 0.25, v + 0.01, str(v), font)
+    plt.margins(0.2)
+    plt.show()
