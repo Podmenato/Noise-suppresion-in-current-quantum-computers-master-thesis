@@ -3,14 +3,28 @@ from typing import List
 
 
 class Effect:
-    def __init__(self, matrix:np.array, label):
+    def __init__(self, matrix: np.array, label):
+        """
+        Represents an effect, contains matrix and label corresponding to the effect
+        :param matrix: Matrix of the effect
+        :param label: Label corresponding to the effect
+        """
         self.matrix = matrix
         self.label = label
 
+
 class POVM:
-    def __init__(self, effects: List[np.array], labels: List[int]):
+    def __init__(self, effects: List[np.array], labels: list):
+        """
+        Represents POVM, contains list of effects and methods for validation
+        :param effects: Effects of the POVM
+        :param labels: Labels corresponding to the effects
+        """
         if len(effects) != len(labels):
             raise ValueError("The labels dont match the effects")
+
+        if len(set(labels)) != len(labels):
+            raise ValueError("Labels are not unique")
 
         elements = []
 
