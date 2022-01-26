@@ -52,11 +52,14 @@ class POVM:
         :param element: numpy array matrix element
         :return: True if element is positive semi definite, False else
         """
-        return np.array_equal(element, element.conj().transpose()) & np.all(np.linalg.eigvals(element) >= 0)
+        return np.all(np.isclose(element, element.conj().transpose())) & np.all(np.linalg.eigvals(element) >= 0)
 
     def __sums_to_identity(self) -> bool:
         """
         Checks if the POVM elements sum to identity
         :return: True if the POVM elements sum to identity, False else
         """
-        return np.array_equal(np.sum(self.elements, 0), np.identity(self.dimension))
+        element_matrices = []
+        for e in self.elements:
+            element_matrices.append(e.matrix)
+        return np.all(np.isclose(np.sum(element_matrices, 0), np.identity(self.dimension)))
