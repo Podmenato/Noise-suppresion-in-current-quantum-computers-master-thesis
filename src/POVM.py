@@ -14,12 +14,18 @@ class Effect:
 
 
 class POVM:
-    def __init__(self, effects: List[np.array], labels: list):
+    def __init__(self, effects: List[np.array], labels=None):
         """
         Represents POVM, contains list of effects and methods for validation
         :param effects: Effects of the POVM
         :param labels: Labels corresponding to the effects
         """
+        if labels is None:
+            labels = []
+        if len(labels) == 0:
+            for i in range(len(effects)):
+                labels.append(str(i))
+
         if len(effects) != len(labels):
             raise ValueError("The labels dont match the effects")
 
