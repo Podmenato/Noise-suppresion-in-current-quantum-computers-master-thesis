@@ -67,3 +67,26 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     circuit.reset(qubits)
 
     return circuit
+
+simple_povm_xyz = [
+        np.array([[1 / 6, 1 / 6],
+                  [1 / 6, 1 / 6]]),
+        np.array([[1 / 6, -1 / 6],
+                  [-1 / 6, 1 / 6]]),
+        np.array([[1 / 6, 0 + (-1j / 6)],
+                  [0 + (1j / 6), 1 / 6]]),
+        np.array([[1 / 6, 0 + (1j / 6)],
+                  [0 + (-1j / 6), 1 / 6]]),
+        np.array([[1 / 3, 0],
+                  [0, 0]]),
+        np.array([[0, 0],
+                  [0, 1 / 3]])
+    ]
+
+__q = 1 / 4
+__k = (1 / np.sqrt(3)) * __q
+__m1 = np.sum([np.array([[__q, 0], [0, __q]]), np.array([[__k, __k * (1 - 1j)], [__k * (1 + 1j), __k * (-1)]])], 0)
+__m2 = np.sum([np.array([[__q, 0], [0, __q]]), np.array([[__k * (-1), __k * (1 + 1j)], [__k * (1 - 1j), __k]])], 0)
+__m3 = np.sum([np.array([[__q, 0], [0, __q]]), np.array([[__k * (-1), __k * (-1 - 1j)], [__k * (-1 + 1j), __k]])], 0)
+__m4 = np.sum([np.array([[__q, 0], [0, __q]]), np.array([[__k, __k * (-1 + 1j)], [__k * (-1 - 1j), __k * (-1)]])], 0)
+povm_tetrahedron = [__m1, __m2, __m3, __m4]

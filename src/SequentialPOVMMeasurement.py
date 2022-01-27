@@ -174,7 +174,7 @@ class SequentialPOVMMeasurementCircuit:
 
 
 class SequentialPOVMMeasurement:
-    def __init__(self, elements: List[np.array], labels: list) -> None:
+    def __init__(self, elements: List[np.array], labels=None) -> None:
         """
         Class used to create circuits for POVM representation using the sequential measurement method
         :param elements: list of all element matrices
@@ -247,8 +247,8 @@ class SequentialPOVMMeasurement:
         :param partitioning:
         :return:
         """
-        # TODO implement method
         seq = SequentialPOVMMeasurementTree(self.povm.elements, partitioning)
+
 
     def __make_single_circuit_helper(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit):
         """
