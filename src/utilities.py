@@ -68,20 +68,29 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
 
     return circuit
 
+
+z_vector1 = np.array([1, 0])
+z_vector2 = np.array([0, 1])
+
+
+def get_rotation_gate(base1: np.array, base2: np.array):
+    return UnitaryGate(np.sum([np.outer(z_vector1, base1), np.outer(z_vector2, base2)], 0))
+
+
 simple_povm_xyz = [
-        np.array([[1 / 6, 1 / 6],
-                  [1 / 6, 1 / 6]]),
-        np.array([[1 / 6, -1 / 6],
-                  [-1 / 6, 1 / 6]]),
-        np.array([[1 / 6, 0 + (-1j / 6)],
-                  [0 + (1j / 6), 1 / 6]]),
-        np.array([[1 / 6, 0 + (1j / 6)],
-                  [0 + (-1j / 6), 1 / 6]]),
-        np.array([[1 / 3, 0],
-                  [0, 0]]),
-        np.array([[0, 0],
-                  [0, 1 / 3]])
-    ]
+    np.array([[1 / 6, 1 / 6],
+              [1 / 6, 1 / 6]]),
+    np.array([[1 / 6, -1 / 6],
+              [-1 / 6, 1 / 6]]),
+    np.array([[1 / 6, 0 + (-1j / 6)],
+              [0 + (1j / 6), 1 / 6]]),
+    np.array([[1 / 6, 0 + (1j / 6)],
+              [0 + (-1j / 6), 1 / 6]]),
+    np.array([[1 / 3, 0],
+              [0, 0]]),
+    np.array([[0, 0],
+              [0, 1 / 3]])
+]
 
 __q = 1 / 4
 __k = (1 / np.sqrt(3)) * __q
