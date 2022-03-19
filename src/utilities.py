@@ -2,6 +2,8 @@ import numpy as np
 from scipy.linalg import fractional_matrix_power
 from qiskit.extensions import UnitaryGate
 from qiskit import *
+import matplotlib.pyplot as plt
+from typing import List
 
 
 def measurement_change(b: np.array, effect: np.array):
@@ -75,6 +77,26 @@ z_vector2 = np.array([0, 1])
 
 def get_rotation_gate(base1: np.array, base2: np.array):
     return UnitaryGate(np.sum([np.outer(z_vector1, base1), np.outer(z_vector2, base2)], 0))
+
+
+def plot_results_histogram(results: List[float], labels: List[str], title=None) -> None:
+    keys = labels
+
+    values = results
+
+    font = {'size': 14}
+
+    plt.figure()
+    plt.xlabel("Measured qubits", font)
+    plt.ylabel("Counts", font)
+    plt.bar(keys, values)
+    xlocs, xlabs = plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.title(title)
+    for i, v in enumerate(values):
+        plt.text(xlocs[i] - 0.25, v + 0.01, str(v), font)
+    plt.margins(0.2)
+    plt.show()
 
 
 simple_povm_xyz = [

@@ -2,7 +2,7 @@ import copy
 from typing import List
 import numpy as np
 from POVM import POVM, Effect
-from utilities import get_rotation_gate
+from utilities import get_rotation_gate, plot_results_histogram
 import qiskit
 from qiskit import *
 
@@ -43,15 +43,15 @@ class ProbabilisticProjectiveMeasurement:
         if self.projectors[1].probability != 0 and job2.result().get_counts().get('1') is not None:
             results2 = job2.result().get_counts().get('1')
 
-        return results1, results2
+        return results1 + results2
 
 
 class ProbabilisticMeasurement:
     def __init__(self, elements: List[np.array], labels=None):
-        self.povms = POVM(elements, labels)
+        self.povm = POVM(elements, labels)
         self.projective_measurements = []
 
-        for e in self.povms.elements:
+        for e in self.povm.elements:
             projectors = self.extract_projective_measurement(e)
             projective_measurement = ProbabilisticProjectiveMeasurement(projectors)
             self.projective_measurements.append(projective_measurement)
@@ -92,15 +92,21 @@ class ProbabilisticMeasurement:
 
         return projectors
 
-    # def distribute_probabilities(self):
-
-
     def measure(self, circuit: QuantumCircuit):
         results = []
         for meas in self.projective_measurements:
-            r1, r2 = meas.measure(circuit)
-            results.append(r1)
-            results.append(r2)
+            r = meas.measure(circuit)
+            results.append(r)
 
         return results
-00
+
+    def plot_histogram(self, results: List[int], title=None):
+        percentages = []
+        for result in results:
+            percentages.append(result/1000)
+
+        labels = []
+        for element in self.povm.elements:
+            labels.append(element.label)
+
+        plot_results_histogram(percentages, labels, title)
