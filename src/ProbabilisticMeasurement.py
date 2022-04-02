@@ -5,6 +5,7 @@ from POVM import POVM, Effect
 from utilities import get_rotation_gate, plot_results_histogram
 import qiskit
 from qiskit import *
+from qiskit.providers.backend import Backend
 
 
 class ProbabilityProjector:
@@ -21,9 +22,7 @@ class ProbabilisticProjectiveMeasurement:
         self.base2 = projectors[1].vector
         self.unitary = get_rotation_gate(self.base1, self.base2)
 
-    def measure(self, circuit: QuantumCircuit):
-        qasm = qiskit.Aer.get_backend("qasm_simulator")
-
+    def measure(self, circuit: QuantumCircuit, backend: Backend):
         circuit1 = copy.deepcopy(circuit)
         circuit1.append(self.unitary, [circuit.qubits[0]])
         circuit1.measure(0, 0)
@@ -31,8 +30,8 @@ class ProbabilisticProjectiveMeasurement:
         circuit2.append(self.unitary, [circuit.qubits[0]])
         circuit2.measure(0, 0)
 
-        job1 = qiskit.execute(circuit1, qasm, shots=self.projectors[0].shots)
-        job2 = qiskit.execute(circuit2, qasm, shots=self.projectors[1].shots)
+        job1 = qiskit.execute(circuit1, backend, shots=int(self.projectors[0].shots))
+        job2 = qiskit.execute(circuit2, backend, shots=int(self.projectors[1].shots))
 
         results1 = 0
         results2 = 0
@@ -47,9 +46,13 @@ class ProbabilisticProjectiveMeasurement:
 
 
 class ProbabilisticMeasurement:
-    def __init__(self, elements: List[np.array], labels=None):
+    def __init__(self, elements: List[np.array], labels=None, backend=None):
         self.povm = POVM(elements, labels)
         self.projective_measurements = []
+        self.backend = qiskit.Aer.get_backend("qasm_simulator")
+
+        if backend is not None:
+            self.backend = backend
 
         for e in self.povm.elements:
             projectors = self.extract_projective_measurement(e)
@@ -95,7 +98,7 @@ class ProbabilisticMeasurement:
     def measure(self, circuit: QuantumCircuit):
         results = []
         for meas in self.projective_measurements:
-            r = meas.measure(circuit)
+            r = meas.measure(circuit, self.backend)
             results.append(r)
 
         return results
