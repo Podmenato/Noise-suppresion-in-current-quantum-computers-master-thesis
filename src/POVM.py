@@ -39,7 +39,7 @@ class POVM:
             elements.append(effect)
 
         self.elements = elements
-        self.dimension = elements[0].matrix.ndim
+        self.dimension = elements[0].matrix.shape[0]
 
     def validation(self) -> bool:
         """

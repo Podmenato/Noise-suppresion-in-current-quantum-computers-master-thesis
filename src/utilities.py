@@ -33,6 +33,9 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     # create circuit
     circuit = QuantumCircuit(qubits + 1, cbits)
 
+    # for i in range(qubits):
+    #     appended.append(circuit.qubits[i])
+
     # SVD of B matrix into U, B diag and V
     u, b_diag, v = np.linalg.svd(b_measurement, full_matrices=True)
     # transform values into numpy arrays
@@ -45,23 +48,39 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
 
     # print(f"U = {u}")
 
-    circuit.append(u_b_dagger_gate, [circuit.qubits[0]])
+    circuit.append(u_b_dagger_gate, circuit.qubits[0:qubits])
+
+    for i in range(len(b_diag)):
+        circuit.barrier()
+        # make control gates
+        # print(f"v[0]={calc_v(b_diag[0])}")
+        vj = UnitaryGate(calc_v(b_diag[i])).control(qubits)
+
+        x = (2 ** qubits) / 2
+
+        for j in range(qubits):
+            x_j = (2 ** j) / 2
+            if j + 1 == qubits:
+                if i < x:
+                    circuit.x(circuit.qubits[j])
+            else:
+                if i % x < x_j:
+                    circuit.x(circuit.qubits[j])
+
+        circuit.append(vj, circuit.qubits[0:qubits + 1])
+
+        for j in range(qubits):
+            x_j = (2 ** j) / 2
+            if j + 1 == qubits:
+                if i < x:
+                    circuit.x(circuit.qubits[j])
+            else:
+                if i % x < x_j:
+                    circuit.x(circuit.qubits[j])
 
     circuit.barrier()
-    # make control gates
-    # print(f"v[0]={calc_v(b_diag[0])}")
-    vj = UnitaryGate(calc_v(b_diag[0])).control(1)
-    circuit.x(circuit.qubits[0])
-    circuit.append(vj, [circuit.qubits[0], circuit.qubits[qubits]])
-    circuit.x(circuit.qubits[0])
 
-    circuit.barrier()
-    # print(f"v[1]={calc_v(b_diag[1])}")
-    vj = UnitaryGate(calc_v(b_diag[1])).control(1)
-    circuit.append(vj, [circuit.qubits[0], circuit.qubits[qubits]])
-
-    circuit.barrier()
-    circuit.append(u_b_gate, [circuit.qubits[0]])
+    circuit.append(u_b_gate, circuit.qubits[0:qubits])
 
     if measure:
         circuit.measure(circuit.qubits[qubits], measuring_clbit)
