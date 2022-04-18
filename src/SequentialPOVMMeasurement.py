@@ -1,6 +1,7 @@
 import copy
 from typing import List
 import numpy as np
+import qiskit
 from qiskit import *
 from utilities import measurement_change, luder_measurement
 from POVM import POVM, Effect
@@ -240,6 +241,34 @@ class SequentialPOVMMeasurement:
         if seq.partitioning_other is not None:
             circuit_copy = copy.deepcopy(circuit)
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, accumulator)
+
+    def measure(self, partitioning: list, state: QuantumCircuit, backend=None):
+        if backend is None:
+            backend = qiskit.Aer.get_backend("qasm_simulator")
+
+        circuits = self.make_circuits(partitioning, state)
+
+        results = []
+        labels = []
+        for circ in circuits:
+            job = qiskit.execute(circ.q_circuit, backend, shots=1000)
+            data = job.result().get_counts()
+
+            keys = list(data.keys())
+
+            result1 = 0
+            if circ.one_result in keys:
+                result1 = data[circ.one_result]
+            results.append(result1)
+            labels.append(circ.one.label)
+
+            result2 = 0
+            if circ.zero_result in keys:
+                result2 = data[circ.zero_result]
+            results.append(result2)
+            labels.append(circ.zero.label)
+
+        return results, labels
 
     def make_single_circuit(self, partitioning: list):
         """
