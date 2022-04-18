@@ -105,7 +105,7 @@ def plot_results_histogram(results: List[float], labels: List[str], title=None) 
 
     font = {'size': 14}
 
-    plt.figure()
+    plt.figure(figsize=(20, 10))
     plt.xlabel("Measured qubits", font)
     plt.ylabel("Counts", font)
     plt.bar(keys, values)

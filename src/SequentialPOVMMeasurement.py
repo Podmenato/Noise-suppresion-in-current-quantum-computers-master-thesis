@@ -258,13 +258,13 @@ class SequentialPOVMMeasurement:
 
             result1 = 0
             if circ.one_result in keys:
-                result1 = data[circ.one_result]
+                result1 = data[circ.one_result]/1000
             results.append(result1)
             labels.append(circ.one.label)
 
             result2 = 0
             if circ.zero_result in keys:
-                result2 = data[circ.zero_result]
+                result2 = data[circ.zero_result]/1000
             results.append(result2)
             labels.append(circ.zero.label)
 
