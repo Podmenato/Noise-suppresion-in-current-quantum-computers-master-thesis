@@ -18,9 +18,10 @@ class ProbabilityProjector:
 class ProbabilisticProjectiveMeasurement:
     def __init__(self, projectors: List[ProbabilityProjector]):
         self.projectors = projectors
-        self.base1 = projectors[0].vector
-        self.base2 = projectors[1].vector
-        self.unitary = get_rotation_gate(self.base1, self.base2)
+        self.bases = []
+        for projector in projectors:
+            self.bases.append(projector.vector)
+        self.unitary = get_rotation_gate(self.bases[0], self.bases[1])
 
     def measure(self, circuit: QuantumCircuit, backend: Backend):
         circuit1 = copy.deepcopy(circuit)
@@ -87,7 +88,7 @@ class ProbabilisticMeasurement:
         u, d, v = np.linalg.svd(effect.matrix, full_matrices=True)
 
         projectors = []
-        for i in range(2):
+        for i in range(effect.matrix.shape[0]):
             uv = u[:, i]
             vv = v[i, :]
             prob_projector = ProbabilityProjector(uv, np.round(d[i], 14))

@@ -140,3 +140,9 @@ __m2 = np.sum([np.array([[__q, 0], [0, __q]]), np.array([[__k * (-1), __k * (1 +
 __m3 = np.sum([np.array([[__q, 0], [0, __q]]), np.array([[__k * (-1), __k * (-1 - 1j)], [__k * (-1 + 1j), __k]])], 0)
 __m4 = np.sum([np.array([[__q, 0], [0, __q]]), np.array([[__k, __k * (-1 + 1j)], [__k * (-1 - 1j), __k * (-1)]])], 0)
 povm_tetrahedron = [__m1, __m2, __m3, __m4]
+
+__bell_phi_plus = np.array([[1/2, 0, 0, 1/2], [0, 0, 0, 0], [0, 0, 0, 0], [1/2, 0, 0, 1/2]])
+__bell_phi_minus = np.array([[1/2, 0, 0, -1/2], [0, 0, 0, 0], [0, 0, 0, 0], [-1/2, 0, 0, 1/2]])
+__bell_psi_plus = np.array([[0, 0, 0, 0], [0, 1/2, 1/2, 0], [0, 1/2, 1/2, 0], [0, 0, 0, 0]])
+__bell_psi_minus = np.array([[0, 0, 0, 0], [0, 1/2, -1/2, 0], [0, -1/2, 1/2, 0], [0, 0, 0, 0]])
+povm_bell = [__bell_phi_plus, __bell_phi_minus, __bell_psi_plus, __bell_psi_minus]
