@@ -3,7 +3,7 @@ from typing import List
 import numpy as np
 import qiskit
 from qiskit import *
-from utilities import measurement_change, luder_measurement
+from utilities import measurement_change, luder_measurement, plot_results_histogram
 from POVM import POVM, Effect
 import matplotlib.pyplot as plt
 
@@ -246,10 +246,13 @@ class SequentialPOVMMeasurement:
         if backend is None:
             backend = qiskit.Aer.get_backend("qasm_simulator")
 
+        labels = []
+        for element in self.povm.elements:
+            labels.append(element.label)
+
         circuits = self.make_circuits(partitioning, state)
 
-        results = []
-        labels = []
+        results = [0] * len(self.povm.elements)
         for circ in circuits:
             job = qiskit.execute(circ.q_circuit, backend, shots=1000)
             data = job.result().get_counts()
@@ -258,17 +261,26 @@ class SequentialPOVMMeasurement:
 
             result1 = 0
             if circ.one_result in keys:
-                result1 = data[circ.one_result]/1000
-            results.append(result1)
-            labels.append(circ.one.label)
+                result1 = data[circ.one_result]
+            results[labels.index(circ.one.label)] = result1
 
             result2 = 0
             if circ.zero_result in keys:
-                result2 = data[circ.zero_result]/1000
-            results.append(result2)
-            labels.append(circ.zero.label)
+                result2 = data[circ.zero_result]
+            results[labels.index(circ.zero.label)] = result2
 
-        return results, labels
+        return results
+
+    def plot_histogram(self, results: List[int], title=None):
+        percentages = []
+        for result in results:
+            percentages.append(result/1000)
+
+        labels = []
+        for element in self.povm.elements:
+            labels.append(element.label)
+
+        plot_results_histogram(percentages, labels, title)
 
     def make_single_circuit(self, partitioning: list):
         """
