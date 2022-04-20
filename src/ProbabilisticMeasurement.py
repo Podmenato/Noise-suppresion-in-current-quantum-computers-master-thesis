@@ -2,7 +2,7 @@ import copy
 from typing import List
 import numpy as np
 from POVM import POVM, Effect
-from utilities import get_rotation_gate, plot_results_histogram
+from utilities import get_rotation_gate, plot_results_histogram, map_number_to_qubit_result
 import qiskit
 from qiskit import *
 from qiskit.providers.backend import Backend
@@ -21,29 +21,29 @@ class ProbabilisticProjectiveMeasurement:
         self.bases = []
         for projector in projectors:
             self.bases.append(projector.vector)
-        self.unitary = get_rotation_gate(self.bases[0], self.bases[1])
+        self.unitary = get_rotation_gate(self.bases)
 
     def measure(self, circuit: QuantumCircuit, backend: Backend):
-        circuit1 = copy.deepcopy(circuit)
-        circuit1.append(self.unitary, [circuit.qubits[0]])
-        circuit1.measure(0, 0)
-        circuit2 = copy.deepcopy(circuit)
-        circuit2.append(self.unitary, [circuit.qubits[0]])
-        circuit2.measure(0, 0)
+        circuits = []
+        for i in range(2**len(circuit.qubits)):
+            circ = copy.deepcopy(circuit)
+            circ.append(self.unitary, circuit.qubits)
+            circ.measure_all(add_bits=False)
+            circuits.append(circ)
 
-        job1 = qiskit.execute(circuit1, backend, shots=int(self.projectors[0].shots))
-        job2 = qiskit.execute(circuit2, backend, shots=int(self.projectors[1].shots))
+        jobs = []
+        for i in range(len(circuits)):
+            job = qiskit.execute(circuits[i], backend, shots=int(self.projectors[i].shots))
+            jobs.append(job)
 
-        results1 = 0
-        results2 = 0
+        results = [0 for _ in range(len(self.projectors))]
 
-        if self.projectors[0].probability != 0 and job1.result().get_counts().get('0') is not None:
-            results1 = job1.result().get_counts().get('0')
+        for i in range(len(self.projectors)):
+            current_result = map_number_to_qubit_result(i, len(circuit.qubits))
+            if self.projectors[i].probability != 0 and jobs[i].result().get_counts().get(current_result) is not None:
+                results[i] = jobs[i].result().get_counts().get(current_result)
 
-        if self.projectors[1].probability != 0 and job2.result().get_counts().get('1') is not None:
-            results2 = job2.result().get_counts().get('1')
-
-        return results1 + results2
+        return np.sum(results)
 
 
 class ProbabilisticMeasurement:
@@ -60,29 +60,27 @@ class ProbabilisticMeasurement:
             projective_measurement = ProbabilisticProjectiveMeasurement(projectors)
             self.projective_measurements.append(projective_measurement)
 
-        executed_shots = 2000
+        executed_shots = 1000*len(self.projective_measurements[0].projectors)
         shots = 0
         probabilities = []
 
         for x in self.projective_measurements:
-            x.projectors[0].shots = np.floor(x.projectors[0].shots*x.projectors[0].probability)
-            x.projectors[1].shots = np.floor(x.projectors[1].shots*x.projectors[1].probability)
-            shots += x.projectors[0].shots
-            shots += x.projectors[1].shots
-            probabilities.append(x.projectors[0].probability*(1/2))
-            probabilities.append(x.projectors[1].probability*(1/2))
+            for projector in x.projectors:
+                projector.shots = np.floor(projector.shots*projector.probability)
+                shots += projector.shots
+                probabilities.append(projector.probability*(1/len(x.projectors)))
 
         additional_shots = np.random.multinomial(executed_shots - shots, probabilities)
 
         for i in range(len(additional_shots)):
-            projective_measurement_idx = i // 2
-            projector_idx = i % 2
+            projective_measurement_idx = i // len(self.projective_measurements[0].projectors)
+            projector_idx = i % len(self.projective_measurements[0].projectors)
             self.projective_measurements[projective_measurement_idx].projectors[projector_idx].shots += additional_shots[i]
 
         shots = 0
         for x in self.projective_measurements:
-            shots += x.projectors[0].shots
-            shots += x.projectors[1].shots
+            for projector in x.projectors:
+                shots += projector.shots
 
     def extract_projective_measurement(self, effect: Effect):
         u, d, v = np.linalg.svd(effect.matrix, full_matrices=True)
