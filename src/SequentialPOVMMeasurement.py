@@ -242,7 +242,19 @@ class SequentialPOVMMeasurement:
             circuit_copy = copy.deepcopy(circuit)
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, accumulator)
 
-    def measure(self, partitioning: list, state: QuantumCircuit, backend=None):
+    def measure(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None) -> List[int]:
+        """
+        Measures all the circuits from the sequential measurements and puts the results
+        together.
+
+        :param partitioning: list of indices, each corresponding to the index in the element in elements array.
+            Should be in the following format [[1, 2],[3, 4]]. Note, [1,[2, 3]] is not valid, [[1], [2, 3]] is.
+        :param state: circuit with prepared state
+        :param shots: optional number of shots
+        :param backend: optional backend the circuits should be executed on
+        :return: list of result counts
+        """
+
         if backend is None:
             backend = qiskit.Aer.get_backend("qasm_simulator")
 
@@ -254,7 +266,7 @@ class SequentialPOVMMeasurement:
 
         results = [0] * len(self.povm.elements)
         for circ in circuits:
-            job = qiskit.execute(circ.q_circuit, backend, shots=1000)
+            job = qiskit.execute(circ.q_circuit, backend, shots=shots)
             data = job.result().get_counts()
 
             keys = list(data.keys())
@@ -271,32 +283,22 @@ class SequentialPOVMMeasurement:
 
         return results
 
-    def plot_histogram(self, results: List[int], title=None):
+    def plot_histogram(self, results: List[int], shots=1000, title=None) -> None:
+        """
+        Plots a histogram of the Sequential POVM results, with the corresponding labels.
+        Transforms the measurement counts to percentages.
+
+        :param results: of the measurement
+        :param shots: number of performed shots in the measurements
+        :param title: optional title of the histogram
+        :return: None
+        """
         percentages = []
         for result in results:
-            percentages.append(result/1000)
+            percentages.append(result/shots)
 
         labels = []
         for element in self.povm.elements:
             labels.append(element.label)
 
         plot_results_histogram(percentages, labels, title)
-
-    def make_single_circuit(self, partitioning: list):
-        """
-        WIP
-        :param partitioning:
-        :return:
-        """
-        seq = SequentialPOVMMeasurementTree(self.povm.elements, partitioning)
-
-
-    def __make_single_circuit_helper(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit):
-        """
-        WIP
-        :param seq:
-        :param circuit:
-        :return:
-        """
-        # TODO implement method
-        b = np.sum(seq.result_measured, 0)
