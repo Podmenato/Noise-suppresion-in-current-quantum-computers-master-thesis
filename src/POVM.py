@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List
+from utilities import is_positive_semi_definite
 
 
 class Effect:
@@ -47,18 +48,9 @@ class POVM:
         :return: True if POVM is valid, False else
         """
         for element in self.elements:
-            if not self.__is_positive_semi_definite(element.matrix):
+            if not is_positive_semi_definite(element.matrix):
                 return False
         return self.__sums_to_identity()
-
-    @staticmethod
-    def __is_positive_semi_definite(element: np.array, tolerance=+1e-7) -> bool:
-        """
-        Checks if the element is positive semi definite
-        :param element: numpy array matrix element
-        :return: True if element is positive semi definite, False else
-        """
-        return np.all(np.isclose(element, element.conj().transpose())) & np.all(np.linalg.eigvals(element) + tolerance >= 0)
 
     def __sums_to_identity(self) -> bool:
         """
