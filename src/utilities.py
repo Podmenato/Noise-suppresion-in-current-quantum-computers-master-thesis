@@ -230,6 +230,24 @@ def is_positive_semi_definite(element: np.array, tolerance=+1e-7) -> bool:
     return np.all(np.isclose(element, element.conj().transpose())) & np.all(np.linalg.eigvals(element) + tolerance >= 0)
 
 
+def vd(dist1, dist2):
+    s = 0.
+    n1 = sum(dist1[x] for x in dist1)
+    n2 = sum(dist2[x] for x in dist2)
+    for x in [f"{j:04b}" for j in range(16)]:
+        s += abs(dist1.get(x, 0.) / n1 - dist2.get(x, 0.) / n2)
+    return s / 2
+
+
+def vd_int(dist1, dist2):
+    s = 0.
+    n1 = np.sum(dist1)
+    n2 = np.sum(dist2)
+    for i in range(len(dist1)):
+        s += abs(dist1[i] / n1 - dist2[i] / n2)
+    return s / 2
+
+
 # Useful Matrices
 
 """
