@@ -32,7 +32,7 @@ def calc_v(eigenvalue) -> np.array:
 
 
 def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measuring_clbit=0,
-                      measure=True) -> QuantumCircuit:
+                      measure=True, real_device=False) -> QuantumCircuit:
     """
     Returns a circuit representing the Luder measurement
     :param b_measurement: Numpy array matrix, representing the coarse graining of POVM measurements
@@ -40,6 +40,7 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     :param cbits: number of cbits of the prepared circuit
     :param measuring_clbit: number of the clbit on which the measurement should be saved
     :param measure: should a measurement gate be applied at the end ?
+    :param real_device: whether the circuit should be prepared to work on a real device
     :return: QuantumCircuit which performs a Luder measurement
     """
     # create circuit
@@ -58,7 +59,9 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     circuit.append(u_b_dagger_gate, circuit.qubits[0:qubits])
 
     for i in range(len(b_diag)):
-        circuit.barrier()
+        if not real_device:
+            circuit.barrier()
+
         # make control gates
         vj = UnitaryGate(calc_v(b_diag[i])).control(qubits)
 
@@ -84,7 +87,8 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
                 if i % x < x_j:
                     circuit.x(circuit.qubits[j])
 
-    circuit.barrier()
+    if not real_device:
+        circuit.barrier()
 
     circuit.append(u_b_gate, circuit.qubits[0:qubits])
 
