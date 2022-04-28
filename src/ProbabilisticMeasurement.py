@@ -124,13 +124,15 @@ class ProbabilisticMeasurement:
         :return: Results count
         """
 
-        executed_shots = shots * len(self.projective_measurements[0].projectors)
+        executed_shots = shots
+        shots_per_measurement = shots/len(self.projective_measurements[0].projectors)
+
         shots = 0
         probabilities = []
 
         for x in self.projective_measurements:
             for projector in x.projectors:
-                projector.shots = np.floor(projector.shots * projector.probability)
+                projector.shots = np.floor(shots_per_measurement * projector.probability)
                 shots += projector.shots
                 probabilities.append(projector.probability * (1 / len(x.projectors)))
 

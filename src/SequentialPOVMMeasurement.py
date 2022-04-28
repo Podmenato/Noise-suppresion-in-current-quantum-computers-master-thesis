@@ -286,22 +286,26 @@ class SequentialPOVMMeasurement:
 
         circuits = self.make_circuits(partitioning, state, real_device=real_device)
 
+        divided_shots = np.floor(shots / len(circuits))
+        probabilities = [1/len(circuits) for _ in range(len(circuits))]
+        additional_shots = np.random.multinomial(shots - divided_shots * len(circuits), probabilities)
+
         results = [0] * len(self.povm.elements)
-        for circ in circuits:
-            job = qiskit.execute(circ.q_circuit, backend, shots=shots)
+        for i in range(len(circuits)):
+            job = qiskit.execute(circuits[i].q_circuit, backend, shots=divided_shots+additional_shots[i])
             data = job.result().get_counts()
 
             keys = list(data.keys())
 
             result1 = 0
-            if circ.one_result in keys:
-                result1 = data[circ.one_result]
-            results[labels.index(circ.one.label)] = result1
+            if circuits[i].one_result in keys:
+                result1 = data[circuits[i].one_result]
+            results[labels.index(circuits[i].one.label)] = result1
 
             result2 = 0
-            if circ.zero_result in keys:
-                result2 = data[circ.zero_result]
-            results[labels.index(circ.zero.label)] = result2
+            if circuits[i].zero_result in keys:
+                result2 = data[circuits[i].zero_result]
+            results[labels.index(circuits[i].zero.label)] = result2
 
         return results
 
