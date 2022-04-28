@@ -198,9 +198,13 @@ class SequentialPOVMMeasurement:
         circuits: List[SequentialPOVMMeasurementCircuit] = []
         qubits_count = len(state.qubits)
         classical_count = seq.largest_depth()
-        base_circuit = QuantumCircuit(qubits_count + 1, classical_count)
+        if real_device:
+            base_circuit = QuantumCircuit(qubits_count + classical_count, classical_count)
+        else:
+            base_circuit = QuantumCircuit(qubits_count + 1, classical_count)
         base_circuit = base_circuit.compose(state)
-        SequentialPOVMMeasurement.__make_circuits_accum(self, seq, base_circuit, circuits, real_device=real_device)
+        SequentialPOVMMeasurement.__make_circuits_accum(self, seq, base_circuit, len(state.qubits), circuits,
+                                                        real_device=real_device)
 
         # Add zero in case some circuit is shorter than others,
         # in order to match the results of the experiment
@@ -212,12 +216,13 @@ class SequentialPOVMMeasurement:
 
         return circuits
 
-    def __make_circuits_accum(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit,
+    def __make_circuits_accum(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit, state_qubits: int,
                               accumulator: List[SequentialPOVMMeasurementCircuit], real_device=False):
         """
         Helper method used to traverse the SequentialPOVMMeasurementTree and create circuits from it
         :param seq: Internal tree structure
         :param circuit: quantum circuit on to which new addition should be appended
+        :param state_qubits: number of qubits the state is on
         :param accumulator: list of already finished circuits
         :param real_device: whether the circuit should be prepared to work on a real device
         :return: None
@@ -229,18 +234,24 @@ class SequentialPOVMMeasurement:
             rslt_msrd.append(x.matrix)
         b = np.sum(rslt_msrd, 0)
 
+        measuring_qubit = None
+        if real_device:
+            measuring_qubit = state_qubits + seq.depth - 1
+
         # create luder measurement circuit based on b
         luder = luder_measurement(b,
-                                  len(circuit.qubits) - 1,
+                                  len(circuit.qubits),
+                                  state_qubits,
                                   len(circuit.clbits),
                                   seq.depth - 1,
-                                  real_device=real_device)
+                                  real_device=real_device, measuring_qubit=measuring_qubit)
         circuit = circuit.compose(luder)
 
         # traversing deeper into the seq structure
         if seq.partitioning_measured is not None:
             circuit_copy = copy.deepcopy(circuit)
-            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_measured, circuit_copy, accumulator)
+            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_measured, circuit_copy, state_qubits,
+                                                            accumulator, real_device=real_device)
         else:
             accumulator.append(
                 SequentialPOVMMeasurementCircuit(copy.deepcopy(circuit), seq.result_measured[0], seq.result_other[0],
@@ -248,9 +259,11 @@ class SequentialPOVMMeasurement:
 
         if seq.partitioning_other is not None:
             circuit_copy = copy.deepcopy(circuit)
-            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, accumulator)
+            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, state_qubits,
+                                                            accumulator, real_device=real_device)
 
-    def measure(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None) -> List[int]:
+    def measure(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None, real_device=False) -> List[
+        int]:
         """
         Measures all the circuits from the sequential measurements and puts the results
         together.
@@ -260,6 +273,7 @@ class SequentialPOVMMeasurement:
         :param state: circuit with prepared state
         :param shots: optional number of shots
         :param backend: optional backend the circuits should be executed on
+        :param real_device: whether the circuit should be prepared to work on a real device
         :return: list of result counts
         """
 
@@ -270,7 +284,7 @@ class SequentialPOVMMeasurement:
         for element in self.povm.elements:
             labels.append(element.label)
 
-        circuits = self.make_circuits(partitioning, state)
+        circuits = self.make_circuits(partitioning, state, real_device=real_device)
 
         results = [0] * len(self.povm.elements)
         for circ in circuits:
@@ -310,7 +324,7 @@ class SequentialPOVMMeasurement:
         for element in self.povm.elements:
             labels.append(element.label)
 
-        results = [0]*len(labels)
+        results = [0] * len(labels)
 
         self.result_labels = []
 
@@ -376,7 +390,7 @@ class SequentialPOVMMeasurement:
             current_measurements = [meas]
 
         luder_measurement_single_circuit(current_measurements, len(circuit.qubits) - 1, circuit, c_reg,
-                                             len(current_measurements[0][1]) - 1)
+                                         len(current_measurements[0][1]) - 1)
         return circuit
 
     def __traverse_seq_tree_collect_meas(self,

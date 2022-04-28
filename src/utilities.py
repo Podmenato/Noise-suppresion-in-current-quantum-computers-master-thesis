@@ -31,20 +31,22 @@ def calc_v(eigenvalue) -> np.array:
                      [eigenvalue ** (1 / 2), (1 - eigenvalue) ** (1 / 2)]])
 
 
-def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measuring_clbit=0,
-                      measure=True, real_device=False) -> QuantumCircuit:
+def luder_measurement(b_measurement: np.array, qubits: int, state_qubits: int, cbits: int, measuring_clbit=0,
+                      measure=True, real_device=False, measuring_qubit=None) -> QuantumCircuit:
     """
     Returns a circuit representing the Luder measurement
     :param b_measurement: Numpy array matrix, representing the coarse graining of POVM measurements
     :param qubits: number of qubits of the prepared circuit
+    :param state_qubits: number of qubits the state is on
     :param cbits: number of cbits of the prepared circuit
     :param measuring_clbit: number of the clbit on which the measurement should be saved
     :param measure: should a measurement gate be applied at the end ?
     :param real_device: whether the circuit should be prepared to work on a real device
+    :param measuring_qubit: which qubit should be measured. Relevant only when real_device is true.
     :return: QuantumCircuit which performs a Luder measurement
     """
     # create circuit
-    circuit = QuantumCircuit(qubits + 1, cbits)
+    circuit = QuantumCircuit(qubits, cbits)
 
     # SVD of B matrix into U, B diag and V
     u, b_diag, v = np.linalg.svd(b_measurement, full_matrices=True)
@@ -56,31 +58,34 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     u_b_gate = UnitaryGate(u, label="U")
     u_b_dagger_gate = UnitaryGate(u.conj().transpose(), label="U+")
 
-    circuit.append(u_b_dagger_gate, circuit.qubits[0:qubits])
+    circuit.append(u_b_dagger_gate, circuit.qubits[0:state_qubits])
 
     for i in range(len(b_diag)):
         if not real_device:
             circuit.barrier()
 
         # make control gates
-        vj = UnitaryGate(calc_v(b_diag[i])).control(qubits)
+        vj = UnitaryGate(calc_v(b_diag[i])).control(state_qubits)
 
-        x = (2 ** qubits) / 2
+        x = (2 ** state_qubits) / 2
 
-        for j in range(qubits):
+        for j in range(state_qubits):
             x_j = (2 ** j) / 2
-            if j + 1 == qubits:
+            if j + 1 == state_qubits:
                 if i < x:
                     circuit.x(circuit.qubits[j])
             else:
                 if i % x < x_j:
                     circuit.x(circuit.qubits[j])
 
-        circuit.append(vj, circuit.qubits[0:qubits + 1])
+        if measuring_qubit is not None:
+            circuit.append(vj, circuit.qubits[0:state_qubits] + [circuit.qubits[measuring_qubit]])
+        else:
+            circuit.append(vj, circuit.qubits[0:state_qubits + 1])
 
-        for j in range(qubits):
+        for j in range(state_qubits):
             x_j = (2 ** j) / 2
-            if j + 1 == qubits:
+            if j + 1 == state_qubits:
                 if i < x:
                     circuit.x(circuit.qubits[j])
             else:
@@ -90,12 +95,16 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     if not real_device:
         circuit.barrier()
 
-    circuit.append(u_b_gate, circuit.qubits[0:qubits])
+    circuit.append(u_b_gate, circuit.qubits[0:state_qubits])
 
     if measure:
-        circuit.measure(circuit.qubits[qubits], measuring_clbit)
+        if measuring_qubit is not None:
+            circuit.measure(circuit.qubits[measuring_qubit], measuring_clbit)
+        else:
+            circuit.measure(circuit.qubits[state_qubits], measuring_clbit)
 
-    circuit.reset(qubits)
+    if measuring_qubit is None:
+        circuit.reset(state_qubits)
 
     return circuit
 
