@@ -100,6 +100,77 @@ def luder_measurement(b_measurement: np.array, qubits: int, cbits: int, measurin
     return circuit
 
 
+def luder_measurement_single_circuit(b_measurements: List[np.array], qubits: int, circuit: QuantumCircuit,
+                                     c_reg: ClassicalRegister,
+                                     measuring_clbit=0) -> None:
+    for b in b_measurements:
+        print(f"Measuring {b[1]} on condition {b[2]}")
+
+        u, b_diag, v = np.linalg.svd(b[0], full_matrices=True)
+        u = np.array(u)
+
+        u_b_dagger_gate = UnitaryGate(u.conj().transpose(), label="U+")
+
+        if b[2] == "":
+            circuit.append(u_b_dagger_gate, circuit.qubits[0:qubits])
+        else:
+            circuit.append(u_b_dagger_gate, circuit.qubits[0:qubits]).c_if(c_reg, int(b[2], 2))
+
+    for b in b_measurements:
+
+        u, b_diag, v = np.linalg.svd(b[0], full_matrices=True)
+
+        for i in range(len(b_diag)):
+
+            # make control gates
+            vj = UnitaryGate(calc_v(b_diag[i])).control(qubits)
+
+            x = (2 ** qubits) / 2
+
+            for j in range(qubits):
+                x_j = (2 ** j) / 2
+                if j + 1 == qubits:
+                    if i < x:
+                        circuit.x(circuit.qubits[j])
+                else:
+                    if i % x < x_j:
+                        circuit.x(circuit.qubits[j])
+
+            if b[2] == "":
+                circuit.append(vj, circuit.qubits[0:qubits + 1])
+            else:
+                circuit.append(vj, circuit.qubits[0:qubits + 1]).c_if(c_reg, int(b[2], 2))
+
+            for j in range(qubits):
+                x_j = (2 ** j) / 2
+                if j + 1 == qubits:
+                    if i < x:
+                        circuit.x(circuit.qubits[j])
+                else:
+                    if i % x < x_j:
+                        circuit.x(circuit.qubits[j])
+
+    for b in b_measurements:
+        u, b_diag, v = np.linalg.svd(b[0], full_matrices=True)
+        u = np.array(u)
+        u_b_gate = UnitaryGate(u, label="U")
+
+        if b[2] == "":
+            circuit.append(u_b_gate, circuit.qubits[0:qubits])
+        else:
+            circuit.append(u_b_gate, circuit.qubits[0:qubits]).c_if(c_reg, int(b[2], 2))
+
+    circuit.measure(circuit.qubits[qubits], circuit.clbits[measuring_clbit])
+
+    circuit.reset(qubits)
+
+    return None
+
+
+def binary_to_int(bin_string: str) -> int:
+    return int(bin_string, 2)
+
+
 def get_rotation_gate(base_vectors: List[np.array]) -> UnitaryGate:
     """
     Calculates a gate that rotates the state from computational basis

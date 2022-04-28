@@ -1,9 +1,9 @@
 import copy
-from typing import List
+from typing import List, Union
 import numpy as np
 import qiskit
 from qiskit import *
-from utilities import measurement_change, luder_measurement, plot_results_histogram
+from utilities import measurement_change, luder_measurement, plot_results_histogram, luder_measurement_single_circuit
 from POVM import POVM, Effect
 import matplotlib.pyplot as plt
 
@@ -182,6 +182,7 @@ class SequentialPOVMMeasurement:
         :param labels: TODO
         """
         self.povm = POVM(elements, labels)
+        self.result_labels = []
 
     def make_circuits(self, partitioning: list, state: QuantumCircuit, real_device=False) \
             -> List[SequentialPOVMMeasurementCircuit]:
@@ -290,6 +291,43 @@ class SequentialPOVMMeasurement:
 
         return results
 
+    def measure_single_circuit(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None) -> List[int]:
+        """
+        Builds a single circuit measuring sequential measurement based on previous results using c_if condition.
+        This means this method does not work on a real hardware, only on simulator.
+        :param partitioning: list of indices, each corresponding to the index in the element in elements array.
+            Should be in the following format [[1, 2],[3, 4]]. Note, [1,[2, 3]] is not valid, [[1], [2, 3]] is.
+        :param state: circuit with prepared state
+        :param shots: optional number of shots
+        :param backend: optional backend the circuits should be executed on
+        :return: list of result counts
+        """
+
+        if backend is None:
+            backend = qiskit.Aer.get_backend("qasm_simulator")
+
+        labels = []
+        for element in self.povm.elements:
+            labels.append(element.label)
+
+        results = [0]*len(labels)
+
+        self.result_labels = []
+
+        circuit = self.make_single_circuit(partitioning, state)
+
+        job = qiskit.execute(circuit, backend, shots=shots)
+        data = job.result().get_counts()
+
+        keys = list(data.keys())
+
+        for result_label in self.result_labels:
+            if result_label[0] in keys:
+                idx = labels.index(result_label[1])
+                results[idx] = data[result_label[0]]
+
+        return results
+
     def plot_histogram(self, results: List[int], shots=1000, title=None) -> None:
         """
         Plots a histogram of the Sequential POVM results, with the corresponding labels.
@@ -309,3 +347,64 @@ class SequentialPOVMMeasurement:
             labels.append(element.label)
 
         plot_results_histogram(percentages, labels, title)
+
+    def make_single_circuit(self, partitioning: list, state: QuantumCircuit) -> QuantumCircuit:
+        seq = SequentialPOVMMeasurementTree(self.povm.elements, partitioning)
+        qubits_count = len(state.qubits)
+        classical_count = seq.largest_depth()
+        q_reg = QuantumRegister(qubits_count + 1)
+        c_reg = ClassicalRegister(classical_count)
+        base_circuit = QuantumCircuit(q_reg, c_reg)
+        base_circuit = base_circuit.compose(state)
+        return SequentialPOVMMeasurement.__make_single_circuit_helper(self, seq, base_circuit, c_reg, classical_count)
+
+    def __make_single_circuit_helper(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit,
+                                     c_reg: ClassicalRegister,
+                                     largest_depth: int) -> QuantumCircuit:
+        measurements = []
+        self.__traverse_seq_tree_collect_meas(seq, 1, largest_depth, '', measurements)
+
+        measurements.sort(key=lambda m: len(m[1]))
+
+        current_measurements = []
+        for meas in measurements:
+            if len(current_measurements) == 0 or len(meas[1]) == len(current_measurements[0][1]):
+                current_measurements.append(meas)
+                continue
+            luder_measurement_single_circuit(current_measurements, len(circuit.qubits) - 1, circuit, c_reg,
+                                             len(current_measurements[0][1]) - 1)
+            current_measurements = [meas]
+
+        luder_measurement_single_circuit(current_measurements, len(circuit.qubits) - 1, circuit, c_reg,
+                                             len(current_measurements[0][1]) - 1)
+        return circuit
+
+    def __traverse_seq_tree_collect_meas(self,
+                                         seq: SequentialPOVMMeasurementTree,
+                                         depth: int,
+                                         max_depth: int,
+                                         condition: str,
+                                         accumulator: List[Union[np.array, str]]) -> None:
+        b = []
+        for effect in seq.result_measured:
+            b.append(effect.matrix)
+
+        accumulator.append((np.sum(b, 0), seq.measuring_qubits, condition))
+
+        diff = max_depth - depth
+
+        if len(seq.result_measured) == 1:
+            self.result_labels.append((('0' * diff) + seq.measuring_qubits, seq.result_measured[0].label))
+
+        if len(seq.result_other) == 1:
+            self.result_labels.append((('0' * diff) + seq.measuring_qubits_other, seq.result_other[0].label))
+
+        if seq.partitioning_measured is not None:
+            self.__traverse_seq_tree_collect_meas(seq.partitioning_measured, depth + 1, max_depth, '1' + condition,
+                                                  accumulator)
+
+        if seq.partitioning_other is not None:
+            self.__traverse_seq_tree_collect_meas(seq.partitioning_other, depth + 1, max_depth, '0' + condition,
+                                                  accumulator)
+
+        return None
