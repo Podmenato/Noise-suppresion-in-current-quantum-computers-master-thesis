@@ -156,20 +156,20 @@ class ProbabilisticMeasurement:
 
         return results
 
-    def plot_histogram(self, results: List[int], title=None, shots=1000) -> None:
+    def plot_histogram(self, results: List[int], title=None) -> None:
         """
         Plots a histogram of the Probabilistic POVM results, with the corresponding labels.
         Transforms the measurement counts to percentages.
 
         :param results: of the measurement
-        :param shots: number of performed shots in the measurements
         :param title: optional title of the histogram
         :return: None
         """
 
+        total = np.sum(results)
         percentages = []
         for result in results:
-            percentages.append(result / shots)
+            percentages.append(np.round((result / total), 3))
 
         labels = []
         for element in self.povm.elements:

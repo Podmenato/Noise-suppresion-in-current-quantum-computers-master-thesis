@@ -262,7 +262,8 @@ class SequentialPOVMMeasurement:
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, state_qubits,
                                                             accumulator, real_device=real_device)
 
-    def measure(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None, real_device=False) -> List[
+    def measure(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None, real_device=False,
+                memory=False) -> List[
         int]:
         """
         Measures all the circuits from the sequential measurements and puts the results
@@ -287,12 +288,14 @@ class SequentialPOVMMeasurement:
         circuits = self.make_circuits(partitioning, state, real_device=real_device)
 
         divided_shots = np.floor(shots / len(circuits))
-        probabilities = [1/len(circuits) for _ in range(len(circuits))]
+        probabilities = [1 / len(circuits) for _ in range(len(circuits))]
         additional_shots = np.random.multinomial(shots - divided_shots * len(circuits), probabilities)
 
         results = [0] * len(self.povm.elements)
+
         for i in range(len(circuits)):
-            job = qiskit.execute(circuits[i].q_circuit, backend, shots=divided_shots+additional_shots[i])
+            job = qiskit.execute(circuits[i].q_circuit, backend, shots=divided_shots + additional_shots[i],
+                                 memory=memory)
             data = job.result().get_counts()
 
             keys = list(data.keys())
@@ -346,19 +349,19 @@ class SequentialPOVMMeasurement:
 
         return results
 
-    def plot_histogram(self, results: List[int], shots=1000, title=None) -> None:
+    def plot_histogram(self, results: List[int], title=None) -> None:
         """
         Plots a histogram of the Sequential POVM results, with the corresponding labels.
         Transforms the measurement counts to percentages.
 
         :param results: of the measurement
-        :param shots: number of performed shots in the measurements
         :param title: optional title of the histogram
         :return: None
         """
+        total = np.sum(results)
         percentages = []
         for result in results:
-            percentages.append(result / shots)
+            percentages.append(np.round((result / total), 3))
 
         labels = []
         for element in self.povm.elements:
