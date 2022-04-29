@@ -1,11 +1,12 @@
 import copy
-from typing import List
+from typing import List, Any
 import numpy as np
 from POVM import POVM, Effect
 from utilities import get_rotation_gate, plot_results_histogram, map_number_to_qubit_result
 import qiskit
 from qiskit import *
 from qiskit.providers.backend import Backend
+from collections import Counter
 
 
 class ProbabilityProjector:
@@ -53,7 +54,7 @@ class ProbabilisticProjectiveMeasurement:
             self.bases.append(projector.vector)
         self.unitary = get_rotation_gate(self.bases)
 
-    def measure(self, circuit: QuantumCircuit, backend: Backend):
+    def measure(self, circuit: QuantumCircuit, backend: Backend, memory=False):
         """
         Performs a measurement in the probabilistic measurement process
         :param circuit: the measured state
@@ -69,8 +70,11 @@ class ProbabilisticProjectiveMeasurement:
 
         jobs = []
         for i in range(len(circuits)):
-            job = qiskit.execute(circuits[i], backend, shots=int(self.projectors[i].shots))
+            job = qiskit.execute(circuits[i], backend, shots=int(self.projectors[i].shots), memory=memory)
             jobs.append(job)
+
+        if memory:
+            return jobs
 
         results = [0 for _ in range(len(self.projectors))]
 
@@ -78,6 +82,18 @@ class ProbabilisticProjectiveMeasurement:
             current_result = map_number_to_qubit_result(i, len(circuit.qubits))
             if self.projectors[i].probability != 0 and jobs[i].result().get_counts().get(current_result) is not None:
                 results[i] = jobs[i].result().get_counts().get(current_result)
+
+        return np.sum(results)
+
+    def parse_jobs(self, jobs: List[Any], shots, qubits):
+        results = [0 for _ in range(len(self.projectors))]
+
+        for i in range(len(self.projectors)):
+            current_result = map_number_to_qubit_result(i, qubits)
+            if self.projectors[i].probability != 0 and jobs[i].result().get_counts().get(current_result) is not None:
+                memory = jobs[i].result().get_memory()
+                counter = Counter(memory[0:int(self.projectors[i].shots)])
+                results[i] = counter.get(current_result)
 
         return np.sum(results)
 
@@ -115,7 +131,7 @@ class ProbabilisticMeasurement:
 
         return projectors
 
-    def measure(self, circuit: QuantumCircuit, shots=1000, backend=qiskit.Aer.get_backend("qasm_simulator")):
+    def measure(self, circuit: QuantumCircuit, shots=1000, backend=qiskit.Aer.get_backend("qasm_simulator"), memory=False):
         """
         Performs an probabilistic measurement POVM simulation
         :param circuit: measured state
@@ -151,7 +167,36 @@ class ProbabilisticMeasurement:
 
         results = []
         for meas in self.projective_measurements:
-            r = meas.measure(circuit, backend)
+            r = meas.measure(circuit, backend, memory)
+            results.append(r)
+
+        return results
+
+    def parse_sequences(self, jobs: List[List[Any]], executed_shots, parsed_shots, qubits):
+        ratio = executed_shots/parsed_shots
+
+        shots = 0
+        probabilities = []
+
+        for x in self.projective_measurements:
+            for projector in x.projectors:
+                projector.shots = np.floor(projector.shots/ratio)
+                shots += projector.shots
+                probabilities.append(projector.probability * (1 / len(x.projectors)))
+
+        additional_shots = np.random.multinomial(parsed_shots - shots, probabilities)
+
+        for i in range(len(additional_shots)):
+            projective_measurement_idx = i // len(self.projective_measurements[0].projectors)
+            projector_idx = i % len(self.projective_measurements[0].projectors)
+            self.projective_measurements[projective_measurement_idx].projectors[projector_idx].shots \
+                += additional_shots[i]
+
+
+        results = []
+        for i in range(len(self.projective_measurements)):
+
+            r = self.projective_measurements[i].parse_jobs(jobs[i], shots, qubits)
             results.append(r)
 
         return results

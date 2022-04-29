@@ -1,5 +1,5 @@
 import copy
-from typing import List, Union, Dict, Tuple, Any
+from typing import List, Dict, Tuple
 import numpy as np
 import qiskit
 from qiskit import *
@@ -526,7 +526,7 @@ class SequentialPOVMMeasurement:
                                          depth: int,
                                          max_depth: int,
                                          condition: str,
-                                         accumulator: List[Union[np.array, str]]) -> None:
+                                         accumulator: List[Tuple[np.array, str, str]]) -> None:
         b = []
         for effect in seq.result_measured:
             b.append(effect.matrix)
