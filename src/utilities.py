@@ -113,8 +113,6 @@ def luder_measurement_single_circuit(b_measurements: List[np.array], qubits: int
                                      c_reg: ClassicalRegister,
                                      measuring_clbit=0) -> None:
     for b in b_measurements:
-        print(f"Measuring {b[1]} on condition {b[2]}")
-
         u, b_diag, v = np.linalg.svd(b[0], full_matrices=True)
         u = np.array(u)
 

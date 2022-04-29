@@ -1,11 +1,13 @@
 import copy
-from typing import List, Union
+from typing import List, Union, Dict, Tuple, Any
 import numpy as np
 import qiskit
 from qiskit import *
 from utilities import measurement_change, luder_measurement, plot_results_histogram, luder_measurement_single_circuit
 from POVM import POVM, Effect
+from collections import Counter
 import matplotlib.pyplot as plt
+from random import shuffle
 
 
 class SequentialPOVMMeasurementTree:
@@ -174,6 +176,13 @@ class SequentialPOVMMeasurementCircuit:
         plt.show()
 
 
+class SequentialPOVMMeasurementSequence:
+    def __init__(self, measurement_results: List[str], result_one: str, result_zero: str) -> None:
+        self.measurement_results = measurement_results
+        self.result_one = result_one
+        self.result_zero = result_zero
+
+
 class SequentialPOVMMeasurement:
     def __init__(self, elements: List[np.array], labels=None) -> None:
         """
@@ -262,8 +271,7 @@ class SequentialPOVMMeasurement:
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, state_qubits,
                                                             accumulator, real_device=real_device)
 
-    def measure(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None, real_device=False,
-                memory=False) -> List[
+    def measure(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None, real_device=False) -> List[
         int]:
         """
         Measures all the circuits from the sequential measurements and puts the results
@@ -294,8 +302,7 @@ class SequentialPOVMMeasurement:
         results = [0] * len(self.povm.elements)
 
         for i in range(len(circuits)):
-            job = qiskit.execute(circuits[i].q_circuit, backend, shots=divided_shots + additional_shots[i],
-                                 memory=memory)
+            job = qiskit.execute(circuits[i].q_circuit, backend, shots=divided_shots + additional_shots[i])
             data = job.result().get_counts()
 
             keys = list(data.keys())
@@ -311,6 +318,65 @@ class SequentialPOVMMeasurement:
             results[labels.index(circuits[i].zero.label)] = result2
 
         return results
+
+    def measure_result_sequence(self, partitioning: list, state: QuantumCircuit, shots=1000,
+                                backend=None, real_device=False) -> Tuple[
+        List[SequentialPOVMMeasurementSequence], Dict[str, str]]:
+        if backend is None:
+            backend = qiskit.Aer.get_backend("qasm_simulator")
+
+        circuits = self.make_circuits(partitioning, state, real_device=real_device)
+
+        divided_shots = np.floor(shots / len(circuits))
+        probabilities = [1 / len(circuits) for _ in range(len(circuits))]
+        additional_shots = np.random.multinomial(shots - divided_shots * len(circuits), probabilities)
+
+        tree = SequentialPOVMMeasurementTree(self.povm.elements, partitioning)
+        dictionary = dict()
+        self.__make_label_result_dictionary(tree, tree.largest_depth(), 1, dictionary)
+
+        results = []
+        for i in range(len(circuits)):
+            job = qiskit.execute(circuits[i].q_circuit, backend, shots=divided_shots + additional_shots[i], memory=True)
+            data = job.result().get_memory()
+            results.append(SequentialPOVMMeasurementSequence(data, circuits[i].one_result, circuits[i].zero_result))
+
+        return results, dictionary
+
+    def parse_sequence_results(self, data: List[SequentialPOVMMeasurementSequence],
+                               label_result_dictionary: Dict[str, str], shots=None):
+        if shots is None:
+            shots = 0
+            for x in data:
+                shots += len(x.measurement_results)
+
+        divided_shots = np.floor(shots / len(data))
+        probabilities = [1 / len(data) for _ in range(len(data))]
+        additional_shots = np.random.multinomial(shots - divided_shots * len(data), probabilities)
+
+        sampled_data = []
+        for i in range(len(data)):
+            sample = data[i].measurement_results[0:int((divided_shots+additional_shots[i]))]
+            filtered = filter(lambda s: s == data[i].result_one or s == data[i].result_zero, sample)
+            sampled_data.extend(filtered)
+
+        counter = Counter(sampled_data)
+
+        labels = []
+        for element in self.povm.elements:
+            labels.append(element.label)
+
+        results = [0] * len(labels)
+
+        keys = list(counter.keys())
+
+        for key in keys:
+            label = label_result_dictionary[key]
+            idx = labels.index(label)
+            results[idx] = counter[key]
+
+        return results
+
 
     def measure_single_circuit(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None) -> List[int]:
         """
@@ -348,6 +414,61 @@ class SequentialPOVMMeasurement:
                 results[idx] = data[result_label[0]]
 
         return results
+
+    def measure_result_sequence_single_circuit(self, partitioning: list, state: QuantumCircuit, shots=1000,
+                                               backend=None) -> Tuple[List[str], Dict[str, str]]:
+        if backend is None:
+            backend = qiskit.Aer.get_backend("qasm_simulator")
+
+        circuit = self.make_single_circuit(partitioning, state)
+
+        job = qiskit.execute(circuit, backend, shots=shots, memory=True)
+        data = job.result().get_memory()
+
+        tree = SequentialPOVMMeasurementTree(self.povm.elements, partitioning)
+        dictionary = dict()
+        self.__make_label_result_dictionary(tree, tree.largest_depth(), 1, dictionary)
+
+        return data, dictionary
+
+    def parse_sequence_results_single_circuit(self, data: List[str], label_result_dictionary: Dict[str, str],
+                                              shots=None):
+        if shots is None:
+            shots = len(data)
+
+        results = data[0:shots]
+
+        counter = Counter(results)
+
+        labels = []
+        for element in self.povm.elements:
+            labels.append(element.label)
+
+        results = [0] * len(labels)
+
+        keys = list(counter.keys())
+
+        for key in keys:
+            label = label_result_dictionary[key]
+            idx = labels.index(label)
+            results[idx] = counter[key]
+
+        return results
+
+    def __make_label_result_dictionary(self, tree: SequentialPOVMMeasurementTree, max_depth, depth, dic):
+        diff = max_depth - depth
+
+        if len(tree.result_measured) == 1:
+            dic[('0' * diff) + tree.measuring_qubits] = tree.result_measured[0].label
+
+        if len(tree.result_other) == 1:
+            dic[('0' * diff) + tree.measuring_qubits_other] = tree.result_other[0].label
+
+        if tree.partitioning_measured is not None:
+            self.__make_label_result_dictionary(tree.partitioning_measured, max_depth, depth + 1, dic=dic)
+
+        if tree.partitioning_other is not None:
+            self.__make_label_result_dictionary(tree.partitioning_other, max_depth, depth + 1, dic=dic)
 
     def plot_histogram(self, results: List[int], title=None) -> None:
         """
