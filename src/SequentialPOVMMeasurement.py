@@ -447,8 +447,11 @@ class SequentialPOVMMeasurement:
         results = [0] * len(labels)
 
         keys = list(counter.keys())
+        label_keys = list(label_result_dictionary.keys())
 
         for key in keys:
+            if key not in label_keys:
+                continue
             label = label_result_dictionary[key]
             idx = labels.index(label)
             results[idx] = counter[key]
