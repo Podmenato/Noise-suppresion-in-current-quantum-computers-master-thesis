@@ -7,6 +7,7 @@ import qiskit
 from qiskit import *
 from qiskit.providers.backend import Backend
 from collections import Counter
+from random import shuffle
 
 
 class ProbabilityProjector:
@@ -92,7 +93,10 @@ class ProbabilisticProjectiveMeasurement:
             current_result = map_number_to_qubit_result(i, qubits)
             if self.projectors[i].probability != 0 and jobs[i].result().get_counts().get(current_result) is not None:
                 memory = jobs[i].result().get_memory()
+                shuffle(memory)
                 counter = Counter(memory[0:int(self.projectors[i].shots)])
+                if counter.get(current_result) is None:
+                    continue
                 results[i] = counter.get(current_result)
 
         return np.sum(results)

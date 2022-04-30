@@ -3,7 +3,7 @@ from scipy.linalg import fractional_matrix_power
 from qiskit.extensions import UnitaryGate
 from qiskit import *
 import matplotlib.pyplot as plt
-from typing import List
+from typing import List, Tuple
 from qiskit.providers.aer.noise.noise_model import NoiseModel
 from qiskit.providers.aer.noise import ReadoutError
 
@@ -329,6 +329,29 @@ def vd_int(dist1, dist2):
         s += abs(dist1[i] / n1 - dist2[i] / n2)
     return s / 2
 
+
+def save_variation_distances(var_dis: List[float], filename: str):
+    file = open(filename, 'a+')
+    for result in var_dis:
+        file.write(str(result))
+        file.write(",")
+    file.write('\n')
+    file.close()
+
+
+def load_variation_distances(filename: str) -> List[List[float]]:
+    with open(filename, 'r') as f:
+        all_results = []
+        for line in f:
+            results = line.split(",")
+            results.pop()
+
+            to_number = []
+            for result in results:
+                to_number.append(float(result))
+
+            all_results.append(to_number)
+        return all_results
 
 # Useful Matrices
 
