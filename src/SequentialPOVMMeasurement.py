@@ -302,7 +302,7 @@ class SequentialPOVMMeasurement:
         results = [0] * len(self.povm.elements)
 
         for i in range(len(circuits)):
-            job = qiskit.execute(circuits[i].q_circuit, backend, shots=divided_shots + additional_shots[i])
+            job = qiskit.execute(circuits[i].q_circuit, backend, shots=int(divided_shots + additional_shots[i]))
             data = job.result().get_counts()
 
             keys = list(data.keys())
