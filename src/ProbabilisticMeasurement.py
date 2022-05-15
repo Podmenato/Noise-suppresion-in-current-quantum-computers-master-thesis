@@ -86,7 +86,13 @@ class ProbabilisticProjectiveMeasurement:
 
         return np.sum(results)
 
-    def parse_jobs(self, jobs: List[Any], shots, qubits):
+    def parse_jobs(self, jobs: List[Any], qubits):
+        """
+        Parses the jobs returned from main method when memory parameter is set
+        :param jobs: the jobs
+        :param qubits: how many qubits the measured state has
+        :return: results array
+        """
         results = [0 for _ in range(len(self.projectors))]
 
         for i in range(len(self.projectors)):
@@ -108,6 +114,7 @@ class ProbabilisticMeasurement:
 
     Attributes:
     """
+
     def __init__(self, elements: List[np.array], labels=None):
         """
         Constructor for the class
@@ -116,6 +123,9 @@ class ProbabilisticMeasurement:
         """
         self.povm = POVM(elements, labels)
         self.projective_measurements = []
+
+        if not self.povm.validation():
+            raise ValueError('POVM is not valid!')
 
         for e in self.povm.elements:
             projectors = self.extract_projective_measurement(e)
@@ -135,7 +145,8 @@ class ProbabilisticMeasurement:
 
         return projectors
 
-    def measure(self, circuit: QuantumCircuit, shots=1000, backend=qiskit.Aer.get_backend("qasm_simulator"), memory=False):
+    def measure(self, circuit: QuantumCircuit, shots=1000, backend=qiskit.Aer.get_backend("qasm_simulator"),
+                memory=False):
         """
         Performs an probabilistic measurement POVM simulation
         :param circuit: measured state
@@ -145,7 +156,7 @@ class ProbabilisticMeasurement:
         """
 
         executed_shots = shots
-        shots_per_measurement = shots/len(self.projective_measurements[0].projectors)
+        shots_per_measurement = shots / len(self.projective_measurements[0].projectors)
 
         shots = 0
         probabilities = []
@@ -177,14 +188,22 @@ class ProbabilisticMeasurement:
         return results
 
     def parse_sequences(self, jobs: List[List[Any]], executed_shots, parsed_shots, qubits):
-        ratio = executed_shots/parsed_shots
+        """
+        Parses the jobs returned from main method when memory parameter is set
+        :param jobs: the parsed jobs
+        :param executed_shots: how many shots were executed in total
+        :param parsed_shots: how many shots should be parsed
+        :param qubits: on how many qubits the measured state is
+        :return: results array
+        """
+        ratio = executed_shots / parsed_shots
 
         shots = 0
         probabilities = []
 
         for x in self.projective_measurements:
             for projector in x.projectors:
-                projector.shots = np.floor(projector.shots/ratio)
+                projector.shots = np.floor(projector.shots / ratio)
                 shots += projector.shots
                 probabilities.append(projector.probability * (1 / len(x.projectors)))
 
@@ -196,11 +215,9 @@ class ProbabilisticMeasurement:
             self.projective_measurements[projective_measurement_idx].projectors[projector_idx].shots \
                 += additional_shots[i]
 
-
         results = []
         for i in range(len(self.projective_measurements)):
-
-            r = self.projective_measurements[i].parse_jobs(jobs[i], shots, qubits)
+            r = self.projective_measurements[i].parse_jobs(jobs[i], qubits)
             results.append(r)
 
         return results

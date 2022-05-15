@@ -7,7 +7,6 @@ from utilities import measurement_change, luder_measurement, plot_results_histog
 from POVM import POVM, Effect
 from collections import Counter
 import matplotlib.pyplot as plt
-from random import shuffle
 
 
 class SequentialPOVMMeasurementTree:
@@ -192,6 +191,9 @@ class SequentialPOVMMeasurement:
         """
         self.povm = POVM(elements, labels)
         self.result_labels = []
+
+        if not self.povm.validation():
+            raise ValueError('POVM is not valid!')
 
     def make_circuits(self, partitioning: list, state: QuantumCircuit, real_device=False) \
             -> List[SequentialPOVMMeasurementCircuit]:

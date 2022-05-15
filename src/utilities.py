@@ -3,7 +3,7 @@ from scipy.linalg import fractional_matrix_power
 from qiskit.extensions import UnitaryGate
 from qiskit import *
 import matplotlib.pyplot as plt
-from typing import List, Tuple
+from typing import List
 from qiskit.providers.aer.noise.noise_model import NoiseModel
 from qiskit.providers.aer.noise import ReadoutError
 
@@ -112,6 +112,15 @@ def luder_measurement(b_measurement: np.array, qubits: int, state_qubits: int, c
 def luder_measurement_single_circuit(b_measurements: List[np.array], qubits: int, circuit: QuantumCircuit,
                                      c_reg: ClassicalRegister,
                                      measuring_clbit=0) -> None:
+    """
+    Prepares a circuit representing the Luder measurement for the single circuit method, using classical control gates
+    :param b_measurements: Numpy array matrix, representing the coarse graining of POVM measurements
+    :param qubits: number of qubits of the prepared circuit
+    :param circuit: the circuit the measurement is prepared on
+    :param c_reg: classical register of the circuit
+    :param measuring_clbit: currently measured cl_bit
+    :return: Nothing
+    """
     for b in b_measurements:
         u, b_diag, v = np.linalg.svd(b[0], full_matrices=True)
         u = np.array(u)
@@ -322,6 +331,12 @@ def vd(dist1, dist2):
 
 
 def vd_int(dist1, dist2):
+    """
+    Calculates total variational distance
+    :param dist1: array of integers
+    :param dist2: array of integers
+    :return: TVD
+    """
     s = 0.
     n1 = np.sum(dist1)
     n2 = np.sum(dist2)
