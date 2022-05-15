@@ -46,5 +46,5 @@ if __name__ == '__main__':
     state = QuantumCircuit(1, 1)
     circs = seq.make_circuits([[["x+", "x-"], ["y+"]], [["z+", "z-"], ["y-"]]], state)
     print(circs)
-    print(seq.measure([[["x+", "x-"], ["y+"]], [["z+", "z-"], ["y-"]]], state))
-    print(seq.measure([["z+", "z-"], [["y+", "y-"], ["x+", "x-"]]], state))
+    print(seq.measure([[["x+", "x-"], ["y+"]], [["z+", "z-"], ["y-"]]], state, shots=10000))
+    print(seq.measure([["z+", "z-"], [["y+", "y-"], ["x+", "x-"]]], state, shots=10000))

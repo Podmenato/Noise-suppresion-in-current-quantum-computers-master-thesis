@@ -118,7 +118,8 @@ class SequentialPOVMMeasurementTree:
 
 
 class SequentialPOVMMeasurementCircuit:
-    def __init__(self, q_circuit: QuantumCircuit, one: Effect, zero: Effect, one_result: str, zero_result: str):
+    def __init__(self, q_circuit: QuantumCircuit, one: Effect, zero: Effect, one_result: str, zero_result: str,
+                 additional_results=None):
         """
         Class representing the output of the make_circuits method
         :param q_circuit: The quantum circuit measuring the corresponding effects
@@ -131,6 +132,8 @@ class SequentialPOVMMeasurementCircuit:
 
         self.one_result = one_result
         self.zero_result = zero_result
+
+        self.additional_results = additional_results
 
     def plot_histogram(self, data, title=None) -> None:
         """
@@ -187,7 +190,7 @@ class SequentialPOVMMeasurement:
         """
         Class used to create circuits for POVM representation using the sequential measurement method
         :param elements: list of all element matrices
-        :param labels: TODO
+        :param labels: labels assigned to the effects
         """
         self.povm = POVM(elements, labels)
         self.result_labels = []
@@ -228,7 +231,8 @@ class SequentialPOVMMeasurement:
         return circuits
 
     def __make_circuits_accum(self, seq: SequentialPOVMMeasurementTree, circuit: QuantumCircuit, state_qubits: int,
-                              accumulator: List[SequentialPOVMMeasurementCircuit], real_device=False):
+                              accumulator: List[SequentialPOVMMeasurementCircuit], real_device=False,
+                              additional_results=None):
         """
         Helper method used to traverse the SequentialPOVMMeasurementTree and create circuits from it
         :param seq: Internal tree structure
@@ -238,6 +242,9 @@ class SequentialPOVMMeasurement:
         :param real_device: whether the circuit should be prepared to work on a real device
         :return: None
         """
+
+        if additional_results is None:
+            additional_results = []
 
         # current measurement
         rslt_msrd = []
@@ -259,16 +266,33 @@ class SequentialPOVMMeasurement:
         circuit = circuit.compose(luder)
 
         # traversing deeper into the seq structure
-        if seq.partitioning_measured is not None:
+        if seq.partitioning_measured is None and seq.partitioning_other is None:
+            accumulator.append(
+                SequentialPOVMMeasurementCircuit(copy.deepcopy(circuit), seq.result_measured[0], seq.result_other[0],
+                                                 seq.measuring_qubits, seq.measuring_qubits_other,
+                                                 additional_results=additional_results))
+        elif seq.partitioning_measured is not None and seq.partitioning_other is None:
+            new_additional_results = copy.deepcopy(additional_results)
+            new_additional_results.append((seq.measuring_qubits_other, seq.result_other[0]))
+
+            circuit_copy = copy.deepcopy(circuit)
+            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_measured, circuit_copy, state_qubits,
+                                                            accumulator, real_device=real_device, additional_results=new_additional_results)
+
+        elif seq.partitioning_measured is None and seq.partitioning_other is not None:
+            new_additional_results = copy.deepcopy(additional_results)
+            new_additional_results.append((seq.measuring_qubits, seq.result_measured[0]))
+
+            circuit_copy = copy.deepcopy(circuit)
+            SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, state_qubits,
+                                                            accumulator, real_device=real_device, additional_results=new_additional_results)
+        else:
+
             circuit_copy = copy.deepcopy(circuit)
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_measured, circuit_copy, state_qubits,
                                                             accumulator, real_device=real_device)
-        else:
-            accumulator.append(
-                SequentialPOVMMeasurementCircuit(copy.deepcopy(circuit), seq.result_measured[0], seq.result_other[0],
-                                                 seq.measuring_qubits, seq.measuring_qubits_other))
 
-        if seq.partitioning_other is not None:
+
             circuit_copy = copy.deepcopy(circuit)
             SequentialPOVMMeasurement.__make_circuits_accum(self, seq.partitioning_other, circuit_copy, state_qubits,
                                                             accumulator, real_device=real_device)
@@ -319,6 +343,13 @@ class SequentialPOVMMeasurement:
                 result2 = data[circuits[i].zero_result]
             results[labels.index(circuits[i].zero.label)] = result2
 
+            for additional in circuits[i].additional_results:
+                current_result = 0
+                for k in keys:
+                    if str(k).endswith(additional[0]):
+                        current_result += data[k]
+                results[labels.index(additional[1].label)] = current_result
+
         return results
 
     def measure_result_sequence(self, partitioning: list, state: QuantumCircuit, shots=1000,
@@ -358,7 +389,7 @@ class SequentialPOVMMeasurement:
 
         sampled_data = []
         for i in range(len(data)):
-            sample = data[i].measurement_results[0:int((divided_shots+additional_shots[i]))]
+            sample = data[i].measurement_results[0:int((divided_shots + additional_shots[i]))]
             filtered = filter(lambda s: s == data[i].result_one or s == data[i].result_zero, sample)
             sampled_data.extend(filtered)
 
@@ -378,7 +409,6 @@ class SequentialPOVMMeasurement:
             results[idx] = counter[key]
 
         return results
-
 
     def measure_single_circuit(self, partitioning: list, state: QuantumCircuit, shots=1000, backend=None) -> List[int]:
         """
